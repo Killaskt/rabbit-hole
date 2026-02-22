@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -12,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LiquidBackground from '../../components/LiquidBackground';
-import { GameState, getLevelProgress, getGameState, initGameState } from '../../lib/gameState';
+import { GameState, getLevelProgress, getGameState, initGameState, LEVEL_NAMES } from '../../lib/gameState';
 import { useTextSettings } from '../../lib/textSettings';
 import { setCurrentSession } from '../../lib/sessionStore';
 import { clearPausedSession, loadPausedSession, loadSessions, pinSession } from '../../lib/storage';
@@ -20,6 +21,7 @@ import { PausedSession, SessionRecord } from '../../types/lesson';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
 const ACCENT = '#efff00';
+const LEVEL_ICONS = ['○', '◌', '◎', '◐', '◑', '◍', '◈', '◉', '◆', '★'];
 
 function XPBar({ progress }: { progress: number }) {
   return (
@@ -88,6 +90,7 @@ export default function HomeScreen() {
   const [pausedSession, setPausedSession] = useState<PausedSession | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [blink, setBlink] = useState(true);
+  const [showLevelModal, setShowLevelModal] = useState(false);
   const { scale, bold } = useTextSettings();
 
   const loadData = useCallback(async () => {
@@ -171,7 +174,7 @@ export default function HomeScreen() {
 
           {/* Level card */}
           {levelData && (
-            <View style={styles.levelCard}>
+            <Pressable onPress={() => setShowLevelModal(true)} style={({ pressed }) => [styles.levelCard, pressed && { opacity: 0.75 }]}>
               <View style={styles.levelRow}>
                 <View>
                   <Text style={[styles.levelName, { fontSize: 22 * scale }]}>{levelData.levelName}</Text>
@@ -186,7 +189,7 @@ export default function HomeScreen() {
               <Text style={styles.xpProgress}>
                 {levelData.xpInLevel} / {levelData.xpForNextLevel} XP to next level
               </Text>
-            </View>
+            </Pressable>
           )}
 
           {/* Stats row */}
@@ -256,6 +259,38 @@ export default function HomeScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {/* Level history modal */}
+      <Modal visible={showLevelModal} transparent animationType="fade" onRequestClose={() => setShowLevelModal(false)}>
+        <Pressable style={styles.rankBackdrop} onPress={() => setShowLevelModal(false)}>
+          <Pressable style={styles.rankCard} onPress={() => {}}>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+              {LEVEL_NAMES.map((name, i) => {
+                const lvl = i + 1;
+                const current = levelData ? lvl === levelData.level : false;
+                const done = levelData ? lvl < levelData.level : false;
+                return (
+                  <View key={name} style={[styles.rankItem, done && styles.rankItemDone, current && styles.rankItemCurrent]}>
+                    <Text style={[styles.rankIcon, !done && !current && styles.rankIconLocked, current && styles.rankIconCurrent]}>
+                      {LEVEL_ICONS[i]}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.rankName, !done && !current && styles.rankNameLocked, current && styles.rankNameCurrent]}>
+                        {name}
+                      </Text>
+                      <Text style={[styles.rankNum, current && styles.rankNumCurrent]}>LEVEL {lvl}</Text>
+                    </View>
+                    <View style={styles.rankRight}>
+                      {current && <Text style={styles.rankHere}>◀ HERE</Text>}
+                      {done && <Text style={styles.rankCheck}>♛</Text>}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -528,6 +563,79 @@ const styles = StyleSheet.create({
     fontFamily: MONO,
     fontSize: 10,
     color: '#444',
+  },
+
+  rankBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  rankCard: {
+    width: '100%',
+    maxHeight: '80%',
+  },
+  rankItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(10,10,10,0.92)',
+    marginBottom: 6,
+  },
+  rankItemDone: {
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(14,14,14,0.92)',
+  },
+  rankItemCurrent: {
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(20,20,20,0.96)',
+  },
+  rankIcon: {
+    fontFamily: MONO,
+    fontSize: 18,
+    color: '#2a2a2a',
+    width: 22,
+    textAlign: 'center',
+  },
+  rankIconCurrent: { color: '#fff' },
+  rankIconLocked: { color: '#1a1a1a' },
+  rankName: {
+    fontFamily: MONO,
+    fontSize: 13,
+    color: '#444',
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 2,
+  },
+  rankNameCurrent: { color: '#fff' },
+  rankNameLocked: { color: '#1e1e1e' },
+  rankNum: {
+    fontFamily: MONO,
+    fontSize: 9,
+    color: '#2a2a2a',
+    letterSpacing: 2,
+  },
+  rankNumCurrent: { color: '#555' },
+  rankRight: {
+    width: 52,
+    alignItems: 'flex-end',
+  },
+  rankHere: {
+    fontFamily: MONO,
+    fontSize: 9,
+    color: '#555',
+    letterSpacing: 1.5,
+  },
+  rankCheck: {
+    fontFamily: MONO,
+    fontSize: 14,
+    color: ACCENT,
   },
 
   emptyState: {

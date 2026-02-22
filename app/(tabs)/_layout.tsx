@@ -6,8 +6,9 @@ const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default
 function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   return (
     <View style={styles.tabIcon}>
-      <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>{label}</Text>
-      {focused && <View style={styles.tabDot} />}
+      <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>
+        {focused ? '> ' : ''}{label}
+      </Text>
     </View>
   );
 }
@@ -17,23 +18,18 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: '#fff',
-        tabBarInactiveTintColor: '#444',
         tabBarShowLabel: false,
+        tabBarStyle: styles.tabBar,
+        tabBarIconStyle: styles.tabIconContainer,
       }}
     >
       <Tabs.Screen
         name="index"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="◎ HOME" focused={focused} />,
-        }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon label="HOME" focused={focused} /> }}
       />
       <Tabs.Screen
         name="vault"
-        options={{
-          tabBarIcon: ({ focused }) => <TabIcon label="◈ VAULT" focused={focused} />,
-        }}
+        options={{ tabBarIcon: ({ focused }) => <TabIcon label="VAULT" focused={focused} /> }}
       />
     </Tabs>
   );
@@ -44,12 +40,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#080808',
     borderTopColor: 'rgba(255,255,255,0.07)',
     borderTopWidth: 1,
-    height: 64,
+  },
+  tabIconContainer: {
+    width: '100%',
+    height: 44,
+    overflow: 'visible',
   },
   tabIcon: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 8,
+    gap: 5,
   },
   tabLabel: {
     fontFamily: MONO,
@@ -58,13 +59,6 @@ const styles = StyleSheet.create({
     color: '#444',
   },
   tabLabelFocused: {
-    color: '#ffffff',
-  },
-  tabDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#fff',
-    marginTop: 4,
+    color: '#fff',
   },
 });
