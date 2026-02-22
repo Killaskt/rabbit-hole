@@ -39,4 +39,15 @@ export interface SessionRecord {
   xpGained: number;
   quizScore: number;
   lesson: LessonOutput;
+  cardResults?: Array<'noted' | 'acquired'>;
+  pinned?: boolean;
+}
+
+export interface PausedSession {
+  lesson: LessonOutput;
+  mode: 'skim' | 'deep_dive';
+  title: string;
+  sourceType: 'url' | 'thought';
+  cardResults: Array<'noted' | 'acquired'>;
+  pausedAt: number;
 }

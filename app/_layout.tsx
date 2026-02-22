@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { useEffect } from 'react';
 import { initGameState } from '../lib/gameState';
+import { TextSettingsProvider } from '../lib/textSettings';
 
 export default function RootLayout() {
   useEffect(() => {
@@ -11,6 +12,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      <TextSettingsProvider>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -24,7 +26,10 @@ export default function RootLayout() {
         <Stack.Screen name="quiz" options={{ animation: 'fade' }} />
         <Stack.Screen name="results" options={{ animation: 'fade' }} />
         <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="review-session" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="drill" options={{ animation: 'slide_from_right' }} />
       </Stack>
+      </TextSettingsProvider>
     </GestureHandlerRootView>
   );
 }

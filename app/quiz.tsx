@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import LiquidBackground from '../components/LiquidBackground';
 import XPBurst from '../components/XPBurst';
 import { getCurrentSession } from '../lib/sessionStore';
+import { savePausedSession } from '../lib/storage';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
 const XP_CORRECT = 25;
@@ -21,7 +22,7 @@ const XP_CORRECT = 25;
 type AnswerState = 'unanswered' | 'correct' | 'wrong';
 
 export default function QuizScreen() {
-  const { lesson, mode } = getCurrentSession();
+  const { lesson, mode, title, sourceType, cardResults } = getCurrentSession();
   const quiz = lesson?.quiz ?? [];
 
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -31,9 +32,35 @@ export default function QuizScreen() {
   const scoreRef = useRef(0);
   const [xpBursts, setXPBursts] = useState<{ id: number; amount: number }[]>([]);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [abandonState, setAbandonState] = useState<'idle' | 'confirming'>('idle');
+  const abandonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flashAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    return () => {
+      if (abandonTimerRef.current) clearTimeout(abandonTimerRef.current);
+    };
+  }, []);
+
+  const handleExitTap = () => {
+    if (abandonState === 'idle') {
+      setAbandonState('confirming');
+      abandonTimerRef.current = setTimeout(() => setAbandonState('idle'), 3000);
+    } else {
+      if (abandonTimerRef.current) clearTimeout(abandonTimerRef.current);
+      savePausedSession({
+        lesson: lesson!,
+        mode,
+        title,
+        sourceType,
+        cardResults,
+        pausedAt: Date.now(),
+      });
+      router.replace('/');
+    }
+  };
 
   const currentQ = quiz[questionIndex];
   const isLast = questionIndex === quiz.length - 1;
@@ -145,7 +172,14 @@ export default function QuizScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerLabel}>// KNOWLEDGE CHECK</Text>
-          <Text style={styles.scoreText}>{score}/{questionIndex + (answerState !== 'unanswered' ? 1 : 0)}</Text>
+          <View style={styles.headerRight}>
+            <Text style={styles.scoreText}>{score}/{questionIndex + (answerState !== 'unanswered' ? 1 : 0)}</Text>
+            <Pressable onPress={handleExitTap} style={styles.exitBtn}>
+              <Text style={[styles.exitBtnText, abandonState === 'confirming' && styles.exitBtnConfirming]}>
+                {abandonState === 'confirming' ? 'ABORT?' : 'EXIT'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Progress dots */}
@@ -245,12 +279,30 @@ const styles = StyleSheet.create({
     color: '#444',
     letterSpacing: 2,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   scoreText: {
     fontFamily: MONO,
     fontSize: 16,
     color: '#fff',
     fontWeight: '700',
     letterSpacing: 1,
+  },
+  exitBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  exitBtnText: {
+    fontFamily: MONO,
+    fontSize: 10,
+    color: '#444',
+    letterSpacing: 1.5,
+  },
+  exitBtnConfirming: {
+    color: '#f87171',
   },
 
   dots: {

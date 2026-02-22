@@ -30,7 +30,7 @@ const SCORE_MSGS = [
 export default function ResultsScreen() {
   const params = useLocalSearchParams<{ score: string; mode: string }>();
   const quizScore = parseInt(params.score ?? '0', 10);
-  const { lesson, mode, title, sourceType } = getCurrentSession();
+  const { lesson, mode, title, sourceType, cardResults } = getCurrentSession();
 
   const [xp, setXP] = useState<XPBreakdown | null>(null);
   const [displayedXP, setDisplayedXP] = useState(0);
@@ -61,6 +61,7 @@ export default function ResultsScreen() {
         xpGained: result.xp.total,
         quizScore,
         lesson: lesson!,
+        cardResults,
       });
 
       // Animate in

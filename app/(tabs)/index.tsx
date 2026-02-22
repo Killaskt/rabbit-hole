@@ -13,10 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LiquidBackground from '../../components/LiquidBackground';
 import { GameState, getLevelProgress, getGameState, initGameState } from '../../lib/gameState';
-import { loadSessions } from '../../lib/storage';
-import { SessionRecord } from '../../types/lesson';
+import { useTextSettings } from '../../lib/textSettings';
+import { setCurrentSession } from '../../lib/sessionStore';
+import { clearPausedSession, loadPausedSession, loadSessions, pinSession } from '../../lib/storage';
+import { PausedSession, SessionRecord } from '../../types/lesson';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
+const ACCENT = '#efff00';
 
 function XPBar({ progress }: { progress: number }) {
   return (
@@ -26,30 +29,76 @@ function XPBar({ progress }: { progress: number }) {
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string | number }) {
+function StatBox({ label, value, scale = 1, bold = false }: { label: string; value: string | number; scale?: number; bold?: boolean }) {
   return (
     <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { fontSize: 20 * scale }]}>{value}</Text>
+      <Text style={[styles.statLabel, bold && { fontWeight: '700' }]}>{label}</Text>
     </View>
+  );
+}
+
+function TraceRow({ session, onPin, onReview, recent = false, scale = 1, bold = false }: {
+  session: SessionRecord;
+  onPin: () => void;
+  onReview: () => void;
+  recent?: boolean;
+  scale?: number;
+  bold?: boolean;
+}) {
+  const pinned = !!session.pinned;
+  return (
+    <Pressable
+      onPress={onReview}
+      style={({ pressed }) => [styles.sessionRow, pressed && styles.sessionRowPressed]}
+    >
+      <Pressable onPress={onPin} hitSlop={10} style={styles.sessionPinBtn}>
+        <Text style={[styles.sessionPinIcon, pinned && styles.sessionPinIconActive]}>
+          {pinned ? '◆' : '◇'}
+        </Text>
+      </Pressable>
+
+      <View style={styles.sessionInfo}>
+        <Text
+          style={[
+            styles.sessionTitle,
+            recent && styles.sessionTitleRecent,
+            pinned && styles.sessionTitlePinned,
+            { fontSize: 13 * scale },
+          ]}
+          numberOfLines={1}
+        >
+          {session.title}
+        </Text>
+        <Text style={[styles.sessionMeta, scale > 1 && { fontSize: 10 * scale }, bold && { fontWeight: '700' }]}>
+          {session.mode === 'deep_dive' ? 'DEEP' : 'SKIM'} · {session.quizScore}/2 · +{session.xpGained}xp
+        </Text>
+      </View>
+
+      <Text style={styles.sessionDate}>
+        {new Date(session.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+      </Text>
+    </Pressable>
   );
 }
 
 export default function HomeScreen() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [pausedSession, setPausedSession] = useState<PausedSession | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [blink, setBlink] = useState(true);
+  const { scale, bold } = useTextSettings();
 
   const loadData = useCallback(async () => {
     await initGameState();
     setGameState(getGameState());
     setSessions(await loadSessions());
+    setPausedSession(await loadPausedSession());
   }, []);
 
   useEffect(() => { loadData(); }, []);
 
-  // Blinking cursor
   useEffect(() => {
     const id = setInterval(() => setBlink(b => !b), 530);
     return () => clearInterval(id);
@@ -60,6 +109,39 @@ export default function HomeScreen() {
     await loadData();
     setRefreshing(false);
   }, [loadData]);
+
+  const handleResume = () => {
+    if (!pausedSession) return;
+    setCurrentSession(pausedSession.lesson, pausedSession.mode, pausedSession.title, pausedSession.sourceType);
+    router.push('/session');
+  };
+
+  const handleDiscard = async () => {
+    await clearPausedSession();
+    setPausedSession(null);
+  };
+
+  const handleNewSession = async () => {
+    await clearPausedSession();
+    setPausedSession(null);
+    router.push('/new-session');
+  };
+
+  const handlePin = async (id: string, currentlyPinned: boolean) => {
+    await pinSession(id, !currentlyPinned);
+    setSessions(await loadSessions());
+  };
+
+  const handleReview = (id: string) => {
+    router.push({ pathname: '/review-session', params: { id } });
+  };
+
+  const pinnedSessions = sessions.filter(s => s.pinned);
+  const unpinned = sessions.filter(s => !s.pinned);
+  const tracesToShow = [
+    ...pinnedSessions.map(s => ({ session: s, recent: false })),
+    ...unpinned.slice(0, 5).map((s, i) => ({ session: s, recent: i < 3 })),
+  ];
 
   const levelData = gameState ? getLevelProgress(gameState.totalXP) : null;
 
@@ -73,20 +155,14 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#555"
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#555" />
           }
         >
           {/* Header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.headerLabel}>// RABBIT HOLE</Text>
-              <Text style={styles.headerSub}>
-                {`> knowledge_agent${blink ? '_' : ' '}`}
-              </Text>
+              <Text style={styles.headerSub}>{`> knowledge_agent${blink ? '_' : ' '}`}</Text>
             </View>
             <Pressable onPress={() => router.push('/settings')} style={styles.settingsBtn}>
               <Text style={styles.settingsBtnText}>⚙</Text>
@@ -98,11 +174,11 @@ export default function HomeScreen() {
             <View style={styles.levelCard}>
               <View style={styles.levelRow}>
                 <View>
-                  <Text style={styles.levelName}>{levelData.levelName}</Text>
+                  <Text style={[styles.levelName, { fontSize: 22 * scale }]}>{levelData.levelName}</Text>
                   <Text style={styles.levelNum}>LEVEL {levelData.level}</Text>
                 </View>
                 <View style={styles.xpRight}>
-                  <Text style={styles.xpTotal}>{gameState!.totalXP.toLocaleString()}</Text>
+                  <Text style={[styles.xpTotal, { fontSize: 22 * scale }]}>{gameState!.totalXP.toLocaleString()}</Text>
                   <Text style={styles.xpLabel}>TOTAL XP</Text>
                 </View>
               </View>
@@ -116,44 +192,61 @@ export default function HomeScreen() {
           {/* Stats row */}
           {gameState && (
             <View style={styles.statsRow}>
-              <StatBox label="HOLES" value={gameState.totalSessions} />
-              <StatBox label="STREAK" value={`${gameState.currentStreak}d`} />
-              <StatBox label="PERFECT" value={gameState.perfectQuizzes} />
-              <StatBox label="DIVES" value={gameState.totalDeepDives} />
+              <StatBox label="HOLES" value={gameState.totalSessions} scale={scale} bold={bold} />
+              <StatBox label="STREAK" value={`${gameState.currentStreak}d`} scale={scale} bold={bold} />
+              <StatBox label="PERFECT" value={gameState.perfectQuizzes} scale={scale} bold={bold} />
+              <StatBox label="DIVES" value={gameState.totalDeepDives} scale={scale} bold={bold} />
+            </View>
+          )}
+
+          {/* Paused session banner */}
+          {pausedSession && (
+            <View style={styles.pausedBanner}>
+              <Text style={styles.pausedBadge}>◔ PAUSED TRACE</Text>
+              <View style={styles.pausedRow}>
+                <Text style={styles.pausedTitle} numberOfLines={1}>{pausedSession.title}</Text>
+                <Text style={styles.pausedMode}>{pausedSession.mode === 'deep_dive' ? 'DEEP' : 'SKIM'}</Text>
+              </View>
+              <View style={styles.pausedActions}>
+                <Pressable onPress={handleDiscard} style={styles.discardBtn}>
+                  <Text style={styles.discardBtnText}>× DISCARD</Text>
+                </Pressable>
+                <Pressable onPress={handleResume} style={styles.resumeBtn}>
+                  <Text style={styles.resumeBtnText}>RESUME →</Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
           {/* Dive button */}
           <Pressable
-            onPress={() => router.push('/new-session')}
+            onPress={handleNewSession}
             style={({ pressed }) => [styles.diveBtn, pressed && styles.diveBtnPressed]}
           >
             <Text style={styles.diveBtnText}>◎ ENTER THE HOLE</Text>
             <Text style={styles.diveBtnSub}>drop a URL or thought</Text>
           </Pressable>
 
-          {/* Recent sessions */}
-          {sessions.length > 0 && (
+
+          {/* Session history */}
+          {tracesToShow.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>// RECENT TRACES</Text>
-              {sessions.slice(0, 5).map(s => (
-                <View key={s.id} style={styles.sessionRow}>
-                  <View style={styles.sessionDot} />
-                  <View style={styles.sessionInfo}>
-                    <Text style={styles.sessionTitle} numberOfLines={1}>{s.title}</Text>
-                    <Text style={styles.sessionMeta}>
-                      {s.mode.toUpperCase()} · {s.quizScore}/2 · +{s.xpGained}xp
-                    </Text>
-                  </View>
-                  <Text style={styles.sessionDate}>
-                    {new Date(s.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </Text>
-                </View>
+              {tracesToShow.map(({ session: s, recent }) => (
+                <TraceRow
+                  key={s.id}
+                  session={s}
+                  recent={recent}
+                  onPin={() => handlePin(s.id, !!s.pinned)}
+                  onReview={() => handleReview(s.id)}
+                  scale={scale}
+                  bold={bold}
+                />
               ))}
             </View>
           )}
 
-          {sessions.length === 0 && (
+          {tracesToShow.length === 0 && !pausedSession && (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>// NO TRACES YET</Text>
               <Text style={styles.emptyBody}>
@@ -193,13 +286,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-  settingsBtn: {
-    padding: 8,
-  },
-  settingsBtnText: {
-    fontSize: 20,
-    color: '#444',
-  },
+  settingsBtn: { padding: 8 },
+  settingsBtnText: { fontSize: 20, color: '#444' },
 
   levelCard: {
     backgroundColor: 'rgba(18,18,18,0.90)',
@@ -290,6 +378,77 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  pausedBanner: {
+    backgroundColor: 'rgba(14,14,0,0.95)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: ACCENT,
+    padding: 16,
+    marginBottom: 16,
+  },
+  pausedBadge: {
+    fontFamily: MONO,
+    fontSize: 10,
+    color: ACCENT,
+    letterSpacing: 2,
+    marginBottom: 8,
+  },
+  pausedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  pausedTitle: {
+    fontFamily: MONO,
+    fontSize: 13,
+    color: '#ccc',
+    flex: 1,
+  },
+  pausedMode: {
+    fontFamily: MONO,
+    fontSize: 9,
+    color: '#888',
+    letterSpacing: 2,
+    borderWidth: 1,
+    borderColor: '#444',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pausedActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  discardBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  discardBtnText: {
+    fontFamily: MONO,
+    fontSize: 12,
+    color: '#555',
+    letterSpacing: 1,
+  },
+  resumeBtn: {
+    flex: 2,
+    backgroundColor: ACCENT,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  resumeBtnText: {
+    fontFamily: MONO,
+    fontSize: 13,
+    color: '#000',
+    fontWeight: '700',
+    letterSpacing: 1.5,
+  },
+
   diveBtn: {
     backgroundColor: '#efff00',
     borderRadius: 14,
@@ -297,9 +456,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 28,
   },
-  diveBtnPressed: {
-    backgroundColor: '#d4e600',
-  },
+  diveBtnPressed: { backgroundColor: '#d4e600' },
   diveBtnText: {
     fontFamily: MONO,
     fontSize: 16,
@@ -315,6 +472,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
+
   section: { marginBottom: 20 },
   sectionLabel: {
     fontFamily: MONO,
@@ -323,6 +481,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 12,
   },
+
   sessionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -331,18 +490,33 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.05)',
     gap: 12,
   },
-  sessionDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+  sessionRowPressed: {
+    opacity: 0.6,
+  },
+  sessionPinBtn: {
+    width: 14,
+    alignItems: 'center',
+  },
+  sessionPinIcon: {
+    fontFamily: MONO,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.15)',
+  },
+  sessionPinIconActive: {
+    color: ACCENT,
   },
   sessionInfo: { flex: 1 },
   sessionTitle: {
     fontFamily: MONO,
     fontSize: 13,
-    color: '#ccc',
+    color: '#555',
     marginBottom: 3,
+  },
+  sessionTitleRecent: {
+    color: '#ccc',
+  },
+  sessionTitlePinned: {
+    color: '#fff',
   },
   sessionMeta: {
     fontFamily: MONO,

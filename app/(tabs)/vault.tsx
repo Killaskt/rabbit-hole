@@ -1,6 +1,8 @@
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -11,16 +13,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LiquidBackground from '../../components/LiquidBackground';
 import { Achievement, ALL_ACHIEVEMENTS, GameState, getGameState, initGameState } from '../../lib/gameState';
+import { useTextSettings } from '../../lib/textSettings';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
 
-function AchievementCard({ ach, unlocked }: { ach: Achievement; unlocked: boolean }) {
+function AchievementCard({ ach, unlocked, scale, bold }: { ach: Achievement; unlocked: boolean; scale: number; bold: boolean }) {
   return (
     <View style={[styles.achCard, !unlocked && styles.achLocked]}>
       <Text style={[styles.achIcon, !unlocked && styles.achIconLocked]}>{unlocked ? ach.icon : '?'}</Text>
       <View style={styles.achText}>
-        <Text style={[styles.achName, !unlocked && styles.achNameLocked]}>{ach.name}</Text>
-        <Text style={[styles.achDesc, !unlocked && styles.achDescLocked]}>{unlocked ? ach.desc : '???'}</Text>
+        <Text style={[styles.achName, !unlocked && styles.achNameLocked, { fontSize: 13 * scale }]}>{ach.name}</Text>
+        <Text style={[styles.achDesc, !unlocked && styles.achDescLocked, { fontSize: 11 * scale, fontWeight: bold ? '700' : '400' }]}>{unlocked ? ach.desc : '???'}</Text>
       </View>
       {unlocked && <View style={styles.achBadge}><Text style={styles.achBadgeText}>◆</Text></View>}
     </View>
@@ -30,6 +33,7 @@ function AchievementCard({ ach, unlocked }: { ach: Achievement; unlocked: boolea
 export default function VaultScreen() {
   const [gs, setGs] = useState<GameState | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { scale, bold } = useTextSettings();
 
   const load = useCallback(async () => {
     await initGameState();
@@ -82,22 +86,56 @@ export default function VaultScreen() {
           {gs && (
             <View style={styles.statsSection}>
               <Text style={styles.sectionLabel}>// STATISTICS</Text>
-              <View style={styles.statsGrid}>
-                {[
-                  ['TOTAL SESSIONS', gs.totalSessions],
-                  ['DEEP DIVES', gs.totalDeepDives],
-                  ['PERFECT QUIZZES', gs.perfectQuizzes],
-                  ['BEST STREAK', `${gs.longestStreak}d`],
-                  ['CURRENT STREAK', `${gs.currentStreak}d`],
-                  ['TOTAL XP', gs.totalXP.toLocaleString()],
-                ].map(([label, value]) => (
-                  <View key={String(label)} style={styles.statCell}>
-                    <Text style={styles.statCellValue}>{value}</Text>
-                    <Text style={styles.statCellLabel}>{label}</Text>
-                  </View>
-                ))}
+              <View style={styles.statsSunken}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.statsScrollContent}
+                >
+                  {[
+                    [
+                      ['TOTAL SESSIONS', gs.totalSessions],
+                      ['DEEP DIVES', gs.totalDeepDives],
+                      ['PERFECT QUIZZES', gs.perfectQuizzes],
+                    ],
+                    [
+                      ['BEST STREAK', `${gs.longestStreak}d`],
+                      ['CURRENT STREAK', `${gs.currentStreak}d`],
+                      ['TOTAL XP', gs.totalXP.toLocaleString()],
+                    ],
+                    [
+                      ['RECALLS RUN', gs.totalDrills ?? 0],
+                      ['RECALL ACC', gs.totalDrillQuestions ? `${Math.round(((gs.totalDrillCorrect ?? 0) / gs.totalDrillQuestions) * 100)}%` : '—'],
+                    ],
+                  ].map((col, ci) => (
+                    <View key={ci} style={styles.statsColumn}>
+                      {col.map(([label, value]) => (
+                        <View key={String(label)} style={styles.statCell}>
+                          <Text style={[styles.statCellValue, { fontSize: 22 * scale }]}>{value}</Text>
+                          <Text style={[styles.statCellLabel, bold && { fontWeight: '700' }]}>{label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                </ScrollView>
               </View>
             </View>
+          )}
+
+          {/* Recall button */}
+          {gs && gs.totalSessions > 0 && (
+            <Pressable onPress={() => router.push('/drill')} style={styles.recallBtn}>
+              {({ pressed }) => (
+                <>
+                  <Text style={[styles.recallBracket, pressed && styles.recallBracketActive]}>[</Text>
+                  <View style={styles.recallCenter}>
+                    <Text style={[styles.recallBtnLabel, pressed && styles.recallBtnLabelActive]}>◈  RECALL</Text>
+                    <Text style={[styles.recallBtnSub, pressed && styles.recallBtnSubActive]}>test what you know</Text>
+                  </View>
+                  <Text style={[styles.recallBracket, pressed && styles.recallBracketActive]}>]</Text>
+                </>
+              )}
+            </Pressable>
           )}
 
           {/* Achievements list */}
@@ -107,6 +145,8 @@ export default function VaultScreen() {
               key={ach.id}
               ach={ach}
               unlocked={unlocked.includes(ach.id)}
+              scale={scale}
+              bold={bold}
             />
           ))}
         </ScrollView>
@@ -119,6 +159,40 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   safe: { flex: 1 },
   scroll: { padding: 20, paddingBottom: 40 },
+
+  recallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 18,
+    marginBottom: 28,
+  },
+  recallBracket: {
+    fontFamily: MONO,
+    fontSize: 34,
+    color: '#2e2e2e',
+    lineHeight: 38,
+  },
+  recallBracketActive: { color: '#efff00' },
+  recallCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  recallBtnLabel: {
+    fontFamily: MONO,
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '700',
+    letterSpacing: 4,
+    marginBottom: 5,
+  },
+  recallBtnLabelActive: { color: '#efff00' },
+  recallBtnSub: {
+    fontFamily: MONO,
+    fontSize: 10,
+    color: '#444',
+    letterSpacing: 1,
+  },
+  recallBtnSubActive: { color: '#9aaa00' },
 
   title: {
     fontFamily: MONO,
@@ -137,9 +211,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  achProgress: {
-    marginBottom: 28,
-  },
+  achProgress: { marginBottom: 28 },
   achProgressText: {
     fontFamily: MONO,
     fontSize: 12,
@@ -166,18 +238,24 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 14,
   },
-  statsGrid: {
+  statsSunken: {
+    overflow: 'hidden',
+  },
+  statsScrollContent: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+    paddingRight: 20,
+  },
+  statsColumn: {
+    width: 132,
+    gap: 8,
   },
   statCell: {
-    width: '47%',
-    backgroundColor: 'rgba(18,18,18,0.90)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    padding: 16,
+    borderColor: 'rgba(255,255,255,0.05)',
+    padding: 14,
   },
   statCellValue: {
     fontFamily: MONO,
@@ -214,9 +292,7 @@ const styles = StyleSheet.create({
     width: 32,
     textAlign: 'center',
   },
-  achIconLocked: {
-    color: '#222',
-  },
+  achIconLocked: { color: '#222' },
   achText: { flex: 1 },
   achName: {
     fontFamily: MONO,

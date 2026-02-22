@@ -6,6 +6,7 @@ interface CurrentSession {
   mode: 'skim' | 'deep_dive';
   title: string;
   sourceType: 'url' | 'thought';
+  cardResults: Array<'noted' | 'acquired'>;
 }
 
 const store: CurrentSession = {
@@ -13,6 +14,7 @@ const store: CurrentSession = {
   mode: 'skim',
   title: '',
   sourceType: 'thought',
+  cardResults: [],
 };
 
 export function setCurrentSession(
@@ -25,10 +27,15 @@ export function setCurrentSession(
   store.mode = mode;
   store.title = title;
   store.sourceType = sourceType;
+  store.cardResults = [];
 }
 
 export function getCurrentSession(): CurrentSession {
-  return { ...store };
+  return { ...store, cardResults: [...store.cardResults] };
+}
+
+export function addCardResult(direction: 'right' | 'left') {
+  store.cardResults.push(direction === 'right' ? 'acquired' : 'noted');
 }
 
 export function clearCurrentSession() {
@@ -36,4 +43,5 @@ export function clearCurrentSession() {
   store.mode = 'skim';
   store.title = '';
   store.sourceType = 'thought';
+  store.cardResults = [];
 }

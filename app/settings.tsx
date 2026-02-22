@@ -25,6 +25,7 @@ import {
   setApiKey,
   setPreferredModel,
 } from '../lib/storage';
+import { SCALE_LABELS, useTextSettings } from '../lib/textSettings';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
 const ACCENT = '#efff00';
@@ -160,6 +161,7 @@ function ApiKeyRow({
 
 export default function SettingsScreen() {
   const [selectedModel, setSelectedModel] = useState<ModelId>('claude-haiku-4-5-20251001');
+  const { scaleIndex, bold, setScaleIndex, toggleBold } = useTextSettings();
 
   useEffect(() => {
     getPreferredModel().then(m => setSelectedModel(m));
@@ -185,6 +187,38 @@ export default function SettingsScreen() {
               </Pressable>
               <Text style={styles.title}>SETTINGS</Text>
             </View>
+
+            {/* Display */}
+            <Text style={styles.sectionLabel}>// DISPLAY</Text>
+            <View style={styles.displayCard}>
+              <Text style={styles.displaySubLabel}>TEXT SIZE</Text>
+              <View style={styles.sizeRow}>
+                {SCALE_LABELS.map((label, i) => (
+                  <Pressable key={i} onPress={() => setScaleIndex(i)} style={styles.sizeOption}>
+                    <Text style={[
+                      styles.sizeA,
+                      { fontSize: 11 + i * 6 },
+                      scaleIndex === i ? styles.sizeAActive : styles.sizeAInactive,
+                    ]}>A</Text>
+                    <View style={[styles.sizeDot, scaleIndex === i && styles.sizeDotActive]} />
+                    <Text style={[styles.sizeLabel, scaleIndex === i && styles.sizeLabelActive]}>{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <View style={styles.previewRow}>
+                <Text style={[styles.previewText, { fontSize: 13 * (1 + scaleIndex * 0.15), fontWeight: bold ? '700' : '400' }]}>
+                  the quick fox jumps
+                </Text>
+              </View>
+            </View>
+            <Pressable onPress={toggleBold} style={styles.boldRow}>
+              <Text style={styles.displaySubLabel}>BOLD TEXT</Text>
+              <Text style={[styles.boldToggle, bold && styles.boldToggleActive]}>
+                {bold ? '[ ON ]' : '[ OFF ]'}
+              </Text>
+            </Pressable>
+
+            <View style={styles.divider} />
 
             {/* Model selector */}
             <Text style={styles.sectionLabel}>// MODEL</Text>
@@ -378,6 +412,82 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   pricingCostActive: { color: ACCENT },
+
+  // Display / accessibility
+  displayCard: {
+    backgroundColor: 'rgba(14,14,14,0.90)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    padding: 16,
+    marginBottom: 10,
+  },
+  displaySubLabel: {
+    fontFamily: MONO,
+    fontSize: 9,
+    color: '#555',
+    letterSpacing: 3,
+    marginBottom: 14,
+  },
+  sizeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  sizeOption: {
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  sizeA: {
+    color: '#fff',
+    fontFamily: MONO,
+    fontWeight: '700',
+  },
+  sizeAActive: { color: '#fff' },
+  sizeAInactive: { color: '#2e2e2e' },
+  sizeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#2e2e2e',
+  },
+  sizeDotActive: { backgroundColor: '#fff' },
+  sizeLabel: {
+    fontFamily: MONO,
+    fontSize: 8,
+    letterSpacing: 1,
+    color: '#2e2e2e',
+  },
+  sizeLabelActive: { color: '#555' },
+  previewRow: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    marginTop: 14,
+    paddingTop: 14,
+  },
+  previewText: {
+    fontFamily: MONO,
+    color: '#666',
+    letterSpacing: 1,
+  },
+  boldRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14,14,14,0.90)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    padding: 16,
+    marginBottom: 8,
+  },
+  boldToggle: {
+    fontFamily: MONO,
+    fontSize: 12,
+    color: '#333',
+    letterSpacing: 1,
+  },
+  boldToggleActive: { color: '#fff' },
 
   divider: {
     height: 1,

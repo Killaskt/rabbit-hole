@@ -10,11 +10,14 @@ export interface Achievement {
 
 export const ALL_ACHIEVEMENTS: Achievement[] = [
   { id: 'first_trace',     name: 'FIRST TRACE',     desc: 'Complete your first rabbit hole',       icon: '◎' },
+  { id: 'first_recall',    name: 'FIRST RECALL',     desc: 'Complete your first recall drill',      icon: '◌' },
   { id: 'mind_breach',     name: 'MIND BREACH',      desc: 'Complete 5 rabbit holes',               icon: '◈' },
-  { id: 'void_walker',     name: 'VOID WALKER',      desc: 'Complete 25 rabbit holes',              icon: '◉' },
   { id: 'quiz_ace',        name: 'QUIZ ACE',         desc: 'Get a perfect quiz score',              icon: '◆' },
+  { id: 'perfect_recall',  name: 'PERFECT RECALL',   desc: 'Score 100% on a recall drill',          icon: '◍' },
   { id: 'deep_diver',      name: 'DEEP DIVER',       desc: 'Complete 3 deep dive sessions',         icon: '▼' },
   { id: 'phantom_streak',  name: 'PHANTOM STREAK',   desc: 'Maintain a 3-day streak',               icon: '▲' },
+  { id: 'void_walker',     name: 'VOID WALKER',      desc: 'Complete 25 rabbit holes',              icon: '◉' },
+  { id: 'recall_veteran',  name: 'RECALL VETERAN',   desc: 'Complete 10 recall drills',             icon: '◎' },
   { id: 'knowledge_vault', name: 'KNOWLEDGE VAULT',  desc: 'Complete 10 sessions in one day',       icon: '▣' },
   { id: 'shadow_agent',    name: 'SHADOW AGENT',     desc: 'Reach level 5',                         icon: '◐' },
   { id: 'rabbit_king',     name: 'RABBIT KING',      desc: 'Reach level 10',                        icon: '◑' },
@@ -86,6 +89,10 @@ export interface GameState {
   perfectQuizzes: number;
   todaySessions: number;
   todayDate: string | null;
+  totalDrills: number;
+  perfectDrills: number;
+  totalDrillCorrect: number;
+  totalDrillQuestions: number;
 }
 
 export const DEFAULT_GAME_STATE: GameState = {
@@ -99,6 +106,10 @@ export const DEFAULT_GAME_STATE: GameState = {
   perfectQuizzes: 0,
   todaySessions: 0,
   todayDate: null,
+  totalDrills: 0,
+  perfectDrills: 0,
+  totalDrillCorrect: 0,
+  totalDrillQuestions: 0,
 };
 
 let _state: GameState = { ...DEFAULT_GAME_STATE };
@@ -199,6 +210,38 @@ export async function recordSession(opts: {
     newAchievements,
     levelUp,
   };
+}
+
+const XP_PER_CORRECT_DRILL = 15;
+
+export async function recordDrill(score: number, total: number): Promise<{
+  xpEarned: number;
+  newAchievements: Achievement[];
+}> {
+  const xpEarned = score * XP_PER_CORRECT_DRILL;
+  _state.totalXP += xpEarned;
+  _state.totalDrills += 1;
+  _state.totalDrillCorrect += score;
+  _state.totalDrillQuestions += total;
+  if (score === total && total > 0) _state.perfectDrills += 1;
+
+  const newAchievements: Achievement[] = [];
+  for (const ach of ALL_ACHIEVEMENTS) {
+    if (_state.achievements.includes(ach.id)) continue;
+    let unlocked = false;
+    switch (ach.id) {
+      case 'first_recall':   unlocked = _state.totalDrills >= 1; break;
+      case 'perfect_recall': unlocked = score === total && total > 0; break;
+      case 'recall_veteran': unlocked = _state.totalDrills >= 10; break;
+    }
+    if (unlocked) {
+      _state.achievements.push(ach.id);
+      newAchievements.push({ ...ach, unlockedAt: Date.now() });
+    }
+  }
+
+  await saveGameState(_state);
+  return { xpEarned, newAchievements };
 }
 
 export function getAllAchievements(): (Achievement & { unlocked: boolean })[] {

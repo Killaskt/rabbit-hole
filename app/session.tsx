@@ -15,8 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import LiquidBackground from '../components/LiquidBackground';
 import SwipeCard from '../components/SwipeCard';
 import XPBurst from '../components/XPBurst';
-import { getCurrentSession } from '../lib/sessionStore';
-import { hasSeenSwipeHint, markSwipeHintSeen } from '../lib/storage';
+import { addCardResult, getCurrentSession } from '../lib/sessionStore';
+import { clearPausedSession, hasSeenSwipeHint, markSwipeHintSeen, savePausedSession } from '../lib/storage';
 import { LessonCard } from '../types/lesson';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
@@ -73,13 +73,15 @@ function SwipeHint({ onDismiss }: { onDismiss: () => void }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function SessionScreen() {
-  const { lesson, mode, title } = getCurrentSession();
+  const { lesson, mode, title, sourceType, cardResults } = getCurrentSession();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [xpBursts, setXPBursts] = useState<{ id: number; amount: number }[]>([]);
   const [totalXPEarned, setTotalXPEarned] = useState(0);
   const [key, setKey] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  const [abandonState, setAbandonState] = useState<'idle' | 'confirming'>('idle');
+  const abandonTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -90,6 +92,12 @@ export default function SessionScreen() {
   useEffect(() => {
     if (!lesson) { router.replace('/'); return; }
     hasSeenSwipeHint().then(seen => { if (!seen) setShowHint(true); });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (abandonTimerRef.current) clearTimeout(abandonTimerRef.current);
+    };
   }, []);
 
   const handleDismissHint = () => {
@@ -107,6 +115,7 @@ export default function SessionScreen() {
 
   const advanceCard = (direction: 'right' | 'left') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    addCardResult(direction);
 
     // XP burst
     const burstId = Date.now();
@@ -127,6 +136,26 @@ export default function SessionScreen() {
       ]).start();
       setCurrentIndex(nextIndex);
       setKey(k => k + 1);
+    }
+  };
+
+  const handleExitTap = () => {
+    if (abandonState === 'idle') {
+      setAbandonState('confirming');
+      abandonTimerRef.current = setTimeout(() => setAbandonState('idle'), 3000);
+    } else {
+      // Confirmed — save paused session and go home
+      if (abandonTimerRef.current) clearTimeout(abandonTimerRef.current);
+      const { cardResults: currentResults } = getCurrentSession();
+      savePausedSession({
+        lesson: lesson!,
+        mode,
+        title,
+        sourceType,
+        cardResults: currentResults,
+        pausedAt: Date.now(),
+      });
+      router.replace('/');
     }
   };
 
@@ -151,6 +180,14 @@ export default function SessionScreen() {
           <View style={styles.topRight}>
             <Text style={styles.modeTag}>{mode === 'deep_dive' ? 'DEEP' : 'SKIM'}</Text>
             <Text style={styles.xpEarned}>+{totalXPEarned}xp</Text>
+            <Pressable onPress={handleExitTap} style={styles.exitBtn}>
+              <Text style={[
+                styles.exitBtnText,
+                abandonState === 'confirming' && styles.exitBtnConfirming,
+              ]}>
+                {abandonState === 'confirming' ? 'ABORT?' : 'EXIT'}
+              </Text>
+            </Pressable>
           </View>
         </View>
 
@@ -250,6 +287,19 @@ const styles = StyleSheet.create({
     color: '#4ade80',
     letterSpacing: 1,
     fontWeight: '700',
+  },
+  exitBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  exitBtnText: {
+    fontFamily: MONO,
+    fontSize: 10,
+    color: '#444',
+    letterSpacing: 1.5,
+  },
+  exitBtnConfirming: {
+    color: '#f87171',
   },
 
   progressBg: {

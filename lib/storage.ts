@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { SessionRecord } from '../types/lesson';
+import { PausedSession, SessionRecord } from '../types/lesson';
 
 const GAME_STATE_KEY = 'rh_game_state';
 const SESSIONS_KEY = 'rh_sessions';
@@ -40,7 +40,36 @@ export async function loadSessions(): Promise<SessionRecord[]> {
 export async function addSession(session: SessionRecord): Promise<void> {
   const sessions = await loadSessions();
   sessions.unshift(session);
-  await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.slice(0, 50)));
+  // Keep all pinned sessions; cull unpinned to stay within 50 total
+  const pinned = sessions.filter(s => s.pinned);
+  const unpinned = sessions.filter(s => !s.pinned).slice(0, Math.max(50 - pinned.length, 10));
+  await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify([...pinned, ...unpinned]));
+}
+
+const PAUSED_SESSION_KEY = 'rh_paused_session';
+
+export async function savePausedSession(s: PausedSession): Promise<void> {
+  await AsyncStorage.setItem(PAUSED_SESSION_KEY, JSON.stringify(s));
+}
+
+export async function loadPausedSession(): Promise<PausedSession | null> {
+  const raw = await AsyncStorage.getItem(PAUSED_SESSION_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export async function clearPausedSession(): Promise<void> {
+  await AsyncStorage.removeItem(PAUSED_SESSION_KEY);
+}
+
+export async function pinSession(id: string, pinned: boolean): Promise<void> {
+  const sessions = await loadSessions();
+  const updated = sessions.map(s => s.id === id ? { ...s, pinned } : s);
+  await AsyncStorage.setItem(SESSIONS_KEY, JSON.stringify(updated));
+}
+
+export async function getSessionById(id: string): Promise<SessionRecord | null> {
+  const sessions = await loadSessions();
+  return sessions.find(s => s.id === id) ?? null;
 }
 
 // ── Model / provider preference ───────────────────────────────────────────────
@@ -109,6 +138,22 @@ export async function getPreferredModel(): Promise<ModelId> {
 
 export async function setPreferredModel(model: ModelId): Promise<void> {
   await AsyncStorage.setItem('rh_preferred_model', model);
+}
+
+// ── Drill dismissed questions ─────────────────────────────────────────────────
+
+const DISMISSED_QUESTIONS_KEY = 'rh_dismissed_questions';
+
+export async function getDismissedQuestions(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(DISMISSED_QUESTIONS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function dismissQuestion(questionText: string): Promise<void> {
+  const existing = await getDismissedQuestions();
+  if (!existing.includes(questionText)) {
+    await AsyncStorage.setItem(DISMISSED_QUESTIONS_KEY, JSON.stringify([...existing, questionText]));
+  }
 }
 
 // ── Onboarding flags ──────────────────────────────────────────────────────────

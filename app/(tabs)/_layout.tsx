@@ -44,8 +44,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#080808',
     borderTopColor: 'rgba(255,255,255,0.07)',
     borderTopWidth: 1,
-    height: 60,
-    paddingBottom: 0,
+    height: 64,
   },
   tabIcon: {
     alignItems: 'center',
