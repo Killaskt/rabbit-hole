@@ -363,14 +363,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: MONO,
     fontSize: 13,
-    color: '#333',
+    color: '#555',
     letterSpacing: 2,
     marginBottom: 12,
   },
   emptyBody: {
     fontFamily: MONO,
     fontSize: 12,
-    color: '#2a2a2a',
+    color: '#555',
     textAlign: 'center',
     lineHeight: 20,
     letterSpacing: 0.5,

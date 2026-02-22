@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   toggleSub: {
     fontFamily: MONO,
     fontSize: 9,
-    color: '#2a2a2a',
+    color: '#555',
     letterSpacing: 1,
     marginTop: 3,
   },

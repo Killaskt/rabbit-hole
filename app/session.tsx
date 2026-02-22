@@ -236,10 +236,10 @@ const styles = StyleSheet.create({
   modeTag: {
     fontFamily: MONO,
     fontSize: 9,
-    color: '#333',
+    color: '#555',
     letterSpacing: 2,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: '#444',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   hint: {
     fontFamily: MONO,
     fontSize: 10,
-    color: '#333',
+    color: '#555',
     letterSpacing: 1.5,
     textAlign: 'center',
     paddingBottom: 12,

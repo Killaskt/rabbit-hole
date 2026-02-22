@@ -294,14 +294,14 @@ const styles = StyleSheet.create({
   sectionHint: {
     fontFamily: MONO,
     fontSize: 11,
-    color: '#2d2d2d',
+    color: '#555',
     lineHeight: 17,
     marginBottom: 16,
   },
   providerLabel: {
     fontFamily: MONO,
     fontSize: 9,
-    color: '#333',
+    color: '#555',
     letterSpacing: 3,
     marginBottom: 8,
     marginTop: 4,
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   modelSublabel: {
     fontFamily: MONO,
     fontSize: 10,
-    color: '#2d2d2d',
+    color: '#555',
     letterSpacing: 0.5,
     marginTop: 3,
   },
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   tierText: {
     fontFamily: MONO,
     fontSize: 8,
-    color: '#2a2a2a',
+    color: '#444',
     letterSpacing: 1.5,
   },
   tierTextFree: { color: 'rgba(239,255,0,0.6)' },
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   keySectionLabel: {
     fontFamily: MONO,
     fontSize: 9,
-    color: '#333',
+    color: '#555',
     letterSpacing: 3,
     marginBottom: 10,
   },
@@ -456,14 +456,14 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontFamily: MONO,
     fontSize: 10,
-    color: '#333',
+    color: '#555',
     letterSpacing: 2,
     marginBottom: 10,
   },
   infoText: {
     fontFamily: MONO,
     fontSize: 11,
-    color: '#2d2d2d',
+    color: '#555',
     lineHeight: 19,
   },
 });
