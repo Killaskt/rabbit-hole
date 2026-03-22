@@ -1,7 +1,14 @@
+export interface KeyTerm {
+  term: string;
+  explanation: string;
+}
+
 export interface LessonCard {
-  id: 'c1' | 'c2' | 'c3' | 'c4' | 'c5';
+  id: string;
+  subtitle: string;
   title: string;
   body: string;
+  key_terms?: KeyTerm[];
 }
 
 export interface QuizQuestion {
@@ -12,6 +19,9 @@ export interface QuizQuestion {
 }
 
 export interface LessonOutput {
+  topic_type: string;
+  complexity: string;
+  tags: string[];
   cards: LessonCard[];
   quiz: QuizQuestion[];
   deeper: [string, string, string];
@@ -41,6 +51,8 @@ export interface SessionRecord {
   lesson: LessonOutput;
   cardResults?: Array<'noted' | 'acquired'>;
   pinned?: boolean;
+  topic_type?: string;
+  tags?: string[];
 }
 
 export interface PausedSession {

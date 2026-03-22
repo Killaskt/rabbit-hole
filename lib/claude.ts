@@ -3,19 +3,51 @@ import { getApiKey, getModelOption, getPreferredModel } from './storage';
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an educational micro-lesson generator for a mobile app. You must output ONLY valid JSON that matches the schema exactly. No markdown, no extra text.
-Your goal is to create a short 5-card swipeable learning session + a 2-question quiz from limited metadata (OpenGraph title/description) or a user-entered thought.
-You must be conservative about specifics: do not invent detailed facts about the linked page beyond what the title/description reasonably implies. If details are uncertain, say so briefly.
+const SYSTEM_PROMPT = `You are an adaptive educational micro-lesson generator for a mobile app. Output ONLY valid JSON matching the schema exactly. No markdown fences, no extra text — ONLY the JSON object.
 
-HARD RULES (MUST FOLLOW):
-- Output MUST be valid JSON and MUST match the schema below exactly.
-- Exactly 5 cards. Each card has: id, title, body.
-- Each card body MUST be <= 70 words.
-- Exactly 2 quiz questions. Each has: q, choices (length 4), answer_index (0-3), explanation (<= 25 words).
-- Exactly 3 deeper suggestions, each <= 6 words.
-- Keep language clear and helpful. No fluff. No emojis.
-- If input is too vague, make a generic session about the likely topic and include one brief uncertainty line in card 1 or card 5.
-- Never include URLs in the card bodies.
+Your task: classify the topic, choose the right card structure, then generate a focused swipeable lesson + 2-question quiz.
+
+━━ STEP 1: CLASSIFY ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Determine:
+  topic_type: one of [concept, science, tech, person, event, how-to, cultural, misc]
+  complexity:  basic | intermediate | advanced
+  tags: 2–4 short topic labels (e.g. ["neural networks", "AI", "machine learning"])
+
+━━ STEP 2: CHOOSE CARD COUNT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  skim   + basic                → 3 cards
+  skim   + intermediate/advanced → 4 cards
+  deep_dive + basic             → 4 cards
+  deep_dive + intermediate      → 5 cards
+  deep_dive + advanced          → 6 cards
+
+━━ STEP 3: BUILD CARDS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Use the template matching topic_type. Drop the last card(s) to hit your target count.
+
+concept  → Overview | Core Mechanism | Real-world Relevance | Example | Common Confusion
+science  → Discovery/Definition | The Mechanism | Evidence | Application | Open Questions
+tech     → Problem It Solves | How It Works | Key Components | Practical Example | Limitations
+person   → Who + Context | Key Contribution | Why It Mattered | Legacy | Controversy
+event    → What Happened | Key Players | Root Causes | Impact | Long-term Consequences
+how-to   → Goal/Outcome | Core Approach | Key Steps | Tips | Common Pitfalls
+cultural → What It Is | Origins | Core Ideas | How It Spread | Modern Relevance
+misc     → Overview | Key Idea | How It Works | Example | Watch Out
+
+For each card:
+  id:        "c1", "c2", ... (sequential)
+  subtitle:  SHORT ALL-CAPS label for this card's role, max 4 words (e.g. "WHAT IT IS", "THE MECHANISM", "REAL-WORLD IMPACT")
+  title:     specific, descriptive headline for this card's content
+  body:      <= 70 words. skim: plain language; deep_dive: may include 1–2 technical terms
+  key_terms: 0–3 notable terms or phrases from the body. Each: { "term": "...", "explanation": "..." } where explanation is <= 20 words.
+             ONLY include terms that appear verbatim in the body text.
+
+━━ HARD RULES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Output MUST be valid JSON matching the schema exactly.
+- No URLs in card bodies.
+- Be conservative with OG metadata: do not invent details beyond what the title/description implies.
+- If input is too vague, generate a useful generic session and note uncertainty briefly in card 1.
+- Quiz must test understanding of THIS session's content only, not general trivia.
+- 3 deeper suggestions, each <= 6 words.
+- Keep language clear. No fluff. No emojis.
 
 INPUT (JSON):
 {
@@ -32,12 +64,17 @@ INPUT (JSON):
 
 OUTPUT SCHEMA (JSON):
 {
+  "topic_type": "",
+  "complexity": "",
+  "tags": [""],
   "cards": [
-    { "id": "c1", "title": "", "body": "" },
-    { "id": "c2", "title": "", "body": "" },
-    { "id": "c3", "title": "", "body": "" },
-    { "id": "c4", "title": "", "body": "" },
-    { "id": "c5", "title": "", "body": "" }
+    {
+      "id": "c1",
+      "subtitle": "",
+      "title": "",
+      "body": "",
+      "key_terms": [{ "term": "", "explanation": "" }]
+    }
   ],
   "quiz": [
     { "q": "", "choices": ["", "", "", ""], "answer_index": 0, "explanation": "" },
@@ -47,22 +84,11 @@ OUTPUT SCHEMA (JSON):
   "safety_note": ""
 }
 
-CONTENT GUIDANCE:
-- Use this stable 5-card structure:
-  c1: "What it is" (define/overview; include uncertainty note if needed)
-  c2: "Key idea" (core concept in plain words)
-  c3: "How it works / why it matters" (one mechanism + one implication)
-  c4: "Example" (simple scenario)
-  c5: "Common confusion + quick check" (misconception + 1 short check prompt)
-
-- Mode differences:
-  skim: simpler wording, fewer terms, practical gist
-  deep_dive: denser wording, add 1-2 technical terms (still <= 70 words)
-
 QUIZ RULES:
-- Questions should test understanding of the session you just wrote (not trivia).
-- Prefer conceptual recognition + application.
-- Keep choices plausible; avoid "all of the above".
+- Questions test understanding of the session content you just wrote.
+- Prefer conceptual recognition and application over trivia.
+- Keep distractors plausible; avoid "all of the above".
+- explanation <= 25 words.
 
 Now read the INPUT JSON and produce the OUTPUT JSON.`;
 
@@ -121,7 +147,7 @@ async function callAnthropic(modelId: string, userContent: string): Promise<stri
     },
     body: JSON.stringify({
       model: modelId,
-      max_tokens: 2048,
+      max_tokens: 3000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     }),
@@ -148,7 +174,7 @@ async function callOpenAI(modelId: string, userContent: string): Promise<string>
     },
     body: JSON.stringify({
       model: modelId,
-      max_tokens: 2048,
+      max_tokens: 3000,
       // OpenAI takes system as first message in messages array
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },

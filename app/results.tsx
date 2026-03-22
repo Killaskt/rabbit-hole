@@ -62,6 +62,8 @@ export default function ResultsScreen() {
         quizScore,
         lesson: lesson!,
         cardResults,
+        topic_type: lesson!.topic_type,
+        tags: lesson!.tags,
       });
 
       // Animate in

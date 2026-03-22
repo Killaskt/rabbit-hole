@@ -1,27 +1,22 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Modal,
   PanResponder,
   Platform,
+  Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { LessonCard } from '../types/lesson';
+import { KeyTerm, LessonCard } from '../types/lesson';
 
 const { width } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.3;
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
 const ACCENT = '#efff00';
-
-const CARD_SUBTITLES = [
-  'WHAT IT IS',
-  'KEY IDEA',
-  'HOW IT WORKS',
-  'EXAMPLE',
-  'WATCH OUT',
-];
 
 interface Props {
   card: LessonCard;
@@ -33,6 +28,7 @@ interface Props {
 
 export default function SwipeCard({ card, index, total, onSwipeRight, onSwipeLeft }: Props) {
   const position = useRef(new Animated.ValueXY()).current;
+  const [activeTerm, setActiveTerm] = useState<KeyTerm | null>(null);
 
   const rotate = position.x.interpolate({
     inputRange: [-width / 2, 0, width / 2],
@@ -53,7 +49,8 @@ export default function SwipeCard({ card, index, total, onSwipeRight, onSwipeLef
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      // false: let taps reach child Pressables; movement still triggers via onMove
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderMove: (_, gesture) => {
         position.setValue({ x: gesture.dx, y: gesture.dy * 0.3 });
@@ -88,51 +85,101 @@ export default function SwipeCard({ card, index, total, onSwipeRight, onSwipeLef
     })
   ).current;
 
-  const cardSubtitle = CARD_SUBTITLES[index] ?? '';
+  const handleShare = async () => {
+    await Share.share({ message: `${card.title}\n\n${card.body}` });
+  };
+
+  const terms = card.key_terms ?? [];
 
   return (
-    <Animated.View
-      style={[
-        styles.card,
-        {
-          transform: [
-            { translateX: position.x },
-            { translateY: position.y },
-            { rotate },
-          ],
-        },
-      ]}
-      {...panResponder.panHandlers}
-    >
-      {/* Swipe labels */}
-      <Animated.View style={[styles.label, styles.labelRight, { opacity: rightLabelOpacity }]}>
-        <Text style={[styles.labelText, { color: ACCENT }]}>ACQUIRED</Text>
+    <>
+      <Animated.View
+        style={[
+          styles.card,
+          {
+            transform: [
+              { translateX: position.x },
+              { translateY: position.y },
+              { rotate },
+            ],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        {/* Swipe labels */}
+        <Animated.View style={[styles.label, styles.labelRight, { opacity: rightLabelOpacity }]}>
+          <Text style={[styles.labelText, { color: ACCENT }]}>ACQUIRED</Text>
+        </Animated.View>
+        <Animated.View style={[styles.label, styles.labelLeft, { opacity: leftLabelOpacity }]}>
+          <Text style={[styles.labelText, { color: '#aaaaaa' }]}>NOTED</Text>
+        </Animated.View>
+
+        {/* Card header */}
+        <View style={styles.header}>
+          <Text style={styles.cardId}>{card.id.toUpperCase()}</Text>
+          <Text style={styles.cardSubtitle}>{card.subtitle ?? ''}</Text>
+          <Text style={styles.progress}>{index + 1} / {total}</Text>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Card title */}
+        <Text style={styles.title}>{card.title}</Text>
+
+        {/* Card body */}
+        <Text style={styles.body}>{card.body}</Text>
+
+        {/* Key terms */}
+        {terms.length > 0 && (
+          <View style={styles.termsRow}>
+            {terms.map((kt) => (
+              <Pressable
+                key={kt.term}
+                onPress={() => setActiveTerm(kt)}
+                style={({ pressed }) => [styles.termChip, pressed && styles.termChipPressed]}
+              >
+                <Text style={styles.termChipText}>{kt.term}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Footer: swipe hint + share */}
+        <View style={styles.footer}>
+          <Text style={styles.hint}>{'< swipe >'}</Text>
+          <Pressable onPress={handleShare} hitSlop={8}>
+            {({ pressed }) => (
+              <Text style={[styles.shareBtn, pressed && styles.shareBtnPressed]}>↑</Text>
+            )}
+          </Pressable>
+        </View>
       </Animated.View>
-      <Animated.View style={[styles.label, styles.labelLeft, { opacity: leftLabelOpacity }]}>
-        <Text style={[styles.labelText, { color: '#aaaaaa' }]}>NOTED</Text>
-      </Animated.View>
 
-      {/* Card header */}
-      <View style={styles.header}>
-        <Text style={styles.cardId}>{card.id.toUpperCase()}</Text>
-        <Text style={styles.cardSubtitle}>{cardSubtitle}</Text>
-        <Text style={styles.progress}>{index + 1} / {total}</Text>
-      </View>
-
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* Card title */}
-      <Text style={styles.title}>{card.title}</Text>
-
-      {/* Card body */}
-      <Text style={styles.body}>{card.body}</Text>
-
-      {/* Swipe hint */}
-      <View style={styles.footer}>
-        <Text style={styles.hint}>{'< swipe >'}</Text>
-      </View>
-    </Animated.View>
+      {/* Key term popup */}
+      {activeTerm && (
+        <Modal
+          transparent
+          animationType="fade"
+          onRequestClose={() => setActiveTerm(null)}
+        >
+          <Pressable style={styles.termOverlay} onPress={() => setActiveTerm(null)}>
+            <Pressable style={styles.termPopup} onPress={() => {}}>
+              <Text style={styles.termPopupTerm}>{activeTerm.term}</Text>
+              <View style={styles.termPopupDivider} />
+              <Text style={styles.termPopupExplanation}>{activeTerm.explanation}</Text>
+              <Pressable onPress={() => setActiveTerm(null)} style={styles.termPopupClose}>
+                {({ pressed }) => (
+                  <Text style={[styles.termPopupCloseText, pressed && { color: '#888' }]}>
+                    [ CLOSE ]
+                  </Text>
+                )}
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -224,14 +271,93 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     flex: 1,
   },
+  termsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 18,
+  },
+  termChip: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  termChipPressed: {
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  termChipText: {
+    fontFamily: MONO,
+    fontSize: 10,
+    color: '#666',
+    letterSpacing: 0.5,
+  },
   footer: {
-    marginTop: 28,
+    marginTop: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   hint: {
     fontFamily: MONO,
     fontSize: 11,
     color: '#333',
+    letterSpacing: 2,
+  },
+  shareBtn: {
+    fontFamily: MONO,
+    fontSize: 14,
+    color: '#333',
+  },
+  shareBtnPressed: {
+    color: '#888',
+  },
+
+  // Term popup
+  termOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  termPopup: {
+    backgroundColor: '#111',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    padding: 24,
+    width: '100%',
+  },
+  termPopupTerm: {
+    fontFamily: MONO,
+    fontSize: 16,
+    color: ACCENT,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 14,
+  },
+  termPopupDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginBottom: 14,
+  },
+  termPopupExplanation: {
+    fontFamily: MONO,
+    fontSize: 13,
+    color: '#aaa',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  termPopupClose: {
+    alignSelf: 'center',
+  },
+  termPopupCloseText: {
+    fontFamily: MONO,
+    fontSize: 11,
+    color: '#555',
     letterSpacing: 2,
   },
 });

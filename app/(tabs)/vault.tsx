@@ -13,9 +13,37 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LiquidBackground from '../../components/LiquidBackground';
 import { Achievement, ALL_ACHIEVEMENTS, GameState, getGameState, initGameState } from '../../lib/gameState';
+import { loadSessions } from '../../lib/storage';
 import { useTextSettings } from '../../lib/textSettings';
+import { SessionRecord } from '../../types/lesson';
 
 const MONO = Platform.select({ ios: 'Courier New', android: 'monospace', default: 'monospace' });
+const ACCENT = '#efff00';
+
+interface TagEntry { tag: string; count: number }
+
+function buildTagCloud(sessions: SessionRecord[]): TagEntry[] {
+  const map: Record<string, number> = {};
+  for (const s of sessions) {
+    for (const tag of s.tags ?? []) {
+      const key = tag.toLowerCase();
+      map[key] = (map[key] ?? 0) + 1;
+    }
+  }
+  return Object.entries(map)
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 32);
+}
+
+function tagVisual(count: number, max: number, isTop: boolean): { fontSize: number; color: string; borderColor: string } {
+  if (isTop && max >= 3) return { fontSize: 14, color: ACCENT, borderColor: 'rgba(239,255,0,0.25)' };
+  if (max <= 1) return { fontSize: 11, color: '#555', borderColor: 'rgba(255,255,255,0.07)' };
+  const ratio = count / max;
+  if (ratio >= 0.6) return { fontSize: 14, color: '#bbb', borderColor: 'rgba(255,255,255,0.14)' };
+  if (ratio >= 0.3) return { fontSize: 12, color: '#666', borderColor: 'rgba(255,255,255,0.08)' };
+  return { fontSize: 10, color: '#333', borderColor: 'rgba(255,255,255,0.04)' };
+}
 
 function AchievementCard({ ach, unlocked, scale, bold }: { ach: Achievement; unlocked: boolean; scale: number; bold: boolean }) {
   return (
@@ -32,12 +60,15 @@ function AchievementCard({ ach, unlocked, scale, bold }: { ach: Achievement; unl
 
 export default function VaultScreen() {
   const [gs, setGs] = useState<GameState | null>(null);
+  const [topicTags, setTopicTags] = useState<TagEntry[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const { scale, bold } = useTextSettings();
 
   const load = useCallback(async () => {
     await initGameState();
     setGs(getGameState());
+    const sessions = await loadSessions();
+    setTopicTags(buildTagCloud(sessions));
   }, []);
 
   useEffect(() => { load(); }, []);
@@ -121,6 +152,31 @@ export default function VaultScreen() {
               </View>
             </View>
           )}
+
+          {/* Topic cloud */}
+          {topicTags.length > 0 && (() => {
+            const max = topicTags[0].count;
+            return (
+              <View style={styles.cloudSection}>
+                <Text style={styles.sectionLabel}>// TOPIC CLOUD</Text>
+                <View style={styles.cloudWrap}>
+                  {topicTags.map(({ tag, count }, i) => {
+                    const { fontSize, color, borderColor } = tagVisual(count, max, i === 0);
+                    return (
+                      <View key={tag} style={[styles.cloudTag, { borderColor }]}>
+                        <Text style={[styles.cloudTagText, { fontSize, color }]}>
+                          {tag.toUpperCase()}
+                        </Text>
+                        {count > 1 && (
+                          <Text style={[styles.cloudTagCount, { color }]}>{count}</Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })()}
 
           {/* Recall button */}
           {gs && gs.totalSessions > 0 && (
@@ -269,6 +325,31 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#444',
     letterSpacing: 1.5,
+  },
+
+  cloudSection: { marginBottom: 28 },
+  cloudWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cloudTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    gap: 5,
+  },
+  cloudTagText: {
+    fontFamily: MONO,
+    letterSpacing: 1,
+  },
+  cloudTagCount: {
+    fontFamily: MONO,
+    fontSize: 9,
+    opacity: 0.6,
   },
 
   achCard: {
