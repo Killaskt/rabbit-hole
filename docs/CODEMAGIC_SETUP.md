@@ -63,7 +63,7 @@ certificate_private_key.pem
 
 ### 2b. Add your app
 1. Click **Add application** → **GitHub**
-2. Select **habbitOS** repo
+2. Select your app's repo
 3. Select **Flutter/React Native/Other** framework → choose **Other** (YAML-based)
 4. Codemagic will detect `codemagic.yaml` automatically
 
@@ -155,3 +155,206 @@ These let GitHub Actions call the Codemagic API.
 | `Missing value KEY_IDENTIFIER` | Variable named `APP_STORE_CONNECT_KEY_ID` instead of `APP_STORE_CONNECT_KEY_IDENTIFIER` | Rename in Codemagic variable group |
 | `No matching profiles found` | `ios_signing` declarative block used without OAuth integration | Use script-based signing (already done in `codemagic.yaml`) |
 | TestFlight never receives build | `submit_to_testflight: true` missing in publishing block | Add to `codemagic.yaml` publishing section |
+| `Path "ios/App/App.xcworkspace" does not exist` | Capacitor v6+ uses SPM — no `.xcworkspace` is ever created | Use `--project ios/App/App.xcodeproj` in `build-ipa`; never use `--workspace` |
+| `"App" requires a provisioning profile` | `xcode-project use-profiles` not finding the project without explicit path | Add `--project "$XCODE_PROJECT"` to the `use-profiles` call |
+| `pod install` step fails or hangs | Capacitor v6+ uses SPM, there is no Podfile | Remove `pod install` step entirely |
+| First TestFlight build blocked on encryption question | No `ITSAppUsesNonExemptEncryption` key in Info.plist | Add `<key>ITSAppUsesNonExemptEncryption</key><false/>` to `ios/App/App/Info.plist` after first `cap add ios` runs |
+
+---
+
+## Capacitor-specific notes
+
+### Capacitor v6+ uses Swift Package Manager (SPM) — not CocoaPods
+
+This is a common source of CI failures. There is no `Podfile`, there is no `.xcworkspace`. The Xcode project is at `ios/App/App.xcodeproj` — always use `--project`, never `--workspace`. Never add a `pod install` step.
+
+### `cap add ios` cannot run on Windows or Linux
+
+It shells out to Xcode tooling and must run on a Mac. Guard it in `codemagic.yaml` so it only runs on the first build after a fresh clone:
+```bash
+if [ ! -d "ios" ]; then
+  npx cap add ios
+fi
+```
+
+The `ios/` directory must **not** be committed — it contains absolute machine paths. Codemagic regenerates it from scratch on every build.
+
+### Export compliance (skip the prompt on every build)
+
+After your first `cap add ios` runs (either locally on a Mac or after the first Codemagic build generates `ios/`), add this to `ios/App/App/Info.plist`:
+```xml
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+```
+Without this, TestFlight will block the build behind an export compliance question every time.
+
+---
+
+## Complete configuration files
+
+These are the complete, verified working versions. Use these exactly.
+
+### `codemagic.yaml`
+
+```yaml
+workflows:
+  ios-testflight:
+    name: iOS TestFlight
+    max_build_duration: 60
+    environment:
+      groups:
+        - ShazamApps
+      vars:
+        BUNDLE_ID: com.yourcompany.appname
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+      xcode: latest
+      node: 22
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: npm run build
+
+      - name: Add iOS platform
+        script: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync Capacitor
+        script: npx cap sync ios
+
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles --project "$XCODE_PROJECT"
+
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+        expire_build_submitted_for_review: true
+```
+
+### `.github/workflows/validate.yml`
+
+Runs on every push and PR. Catches breaks before they hit Codemagic.
+
+```yaml
+name: Validate
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build
+```
+
+### `.github/workflows/deploy.yml`
+
+Runs on merge to `master` (or `main` — match your default branch). Validates then triggers Codemagic.
+
+```yaml
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build
+
+  trigger-codemagic:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Trigger Codemagic build
+        id: trigger
+        env:
+          CODEMAGIC_API_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
+          CODEMAGIC_APP_ID: ${{ secrets.CODEMAGIC_APP_ID }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -H "x-auth-token: $CODEMAGIC_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -X POST https://api.codemagic.io/builds \
+            -d "{\"appId\":\"$CODEMAGIC_APP_ID\",\"workflowId\":\"ios-testflight\",\"branch\":\"${GITHUB_REF_NAME}\"}") 
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Failed to trigger Codemagic: HTTP $HTTP_CODE"
+            echo "$BODY"
+            exit 1
+          fi
+          BUILD_ID=$(echo "$BODY" | python3 -c "import sys,json; print(json.load(sys.stdin)['buildId'])")
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "Codemagic build started: $BUILD_ID"
+
+      - name: Poll for result
+        env:
+          CODEMAGIC_API_TOKEN: ${{ secrets.CODEMAGIC_API_TOKEN }}
+        run: |
+          BUILD_ID="${{ steps.trigger.outputs.build_id }}"
+          for i in $(seq 1 120); do
+            sleep 30
+            STATUS=$(curl -s \
+              -H "x-auth-token: $CODEMAGIC_API_TOKEN" \
+              "https://api.codemagic.io/builds/$BUILD_ID" | \
+              python3 -c "import sys,json; print(json.load(sys.stdin)['build']['status'])")
+            echo "[$i/120] Status: $STATUS"
+            case "$STATUS" in
+              finished)  echo "Build succeeded!" && exit 0 ;;
+              failed|canceled|timeout) echo "Build $STATUS" && exit 1 ;;
+            esac
+          done
+          echo "Timed out waiting for Codemagic build" && exit 1
+```

@@ -1,71 +1,55 @@
 # Known Issues
 
-Issues that have been hit and solved. Check here before debugging a build failure.
+Issues hit and solved in production. Check here first before debugging. Full context and complete working configs are in `CODEMAGIC_SETUP.md` and `RN_TO_CAPACITOR_GUIDE.md`.
 
 ---
 
-## Codemagic: `Path "ios/App/App.xcworkspace" does not exist`
+## Build failures: Codemagic + Capacitor iOS
 
-**Symptom:** Step `Build IPA` fails with:
+### `Path "ios/App/App.xcworkspace" does not exist`
+**Cause:** Using `--workspace` flag. Capacitor v6+ uses SPM — no `.xcworkspace` is ever created.  
+**Fix:** Use `--project ios/App/App.xcodeproj` and `--project "$XCODE_PROJECT"` in `build-ipa`.  
+**Never add `pod install`** — there is no Podfile.
+
+### `"App" requires a provisioning profile`
+**Cause:** `xcode-project use-profiles` called without `--project`, so it can't find the project at `ios/App/App.xcodeproj` and doesn't inject the profile.  
+**Fix:** `xcode-project use-profiles --project "$XCODE_PROJECT"`
+
+### `Cannot save Signing Certificates without certificate private key`
+**Cause:** `CERTIFICATE_PRIVATE_KEY` missing from Codemagic variable group.  
+**Fix:** Generate with `openssl genrsa 2048 > certificate_private_key.pem`, paste full contents into the Codemagic `ShazamApps` group.
+
+### `Missing value KEY_IDENTIFIER`
+**Cause:** Variable named `APP_STORE_CONNECT_KEY_ID` instead of the exact name `codemagic-cli-tools` expects.  
+**Fix:** Rename to `APP_STORE_CONNECT_KEY_IDENTIFIER` in the Codemagic variable group.
+
+### `No matching profiles found`
+**Cause:** Using the declarative `ios_signing` block in `codemagic.yaml`, which requires Codemagic OAuth integration.  
+**Fix:** Use script-based signing (`app-store-connect fetch-signing-files` + `keychain` commands). See `CODEMAGIC_SETUP.md` for the complete working script.
+
+### TestFlight build never appears
+**Cause:** `submit_to_testflight: true` missing from the `publishing.app_store_connect` block.  
+**Fix:** Add it. See `CODEMAGIC_SETUP.md` for the complete publishing block.
+
+### First TestFlight build blocked on export compliance
+**Cause:** No `ITSAppUsesNonExemptEncryption` key in `ios/App/App/Info.plist`.  
+**Fix:** After first `cap add ios` adds the `ios/` directory, add to `Info.plist`:
+```xml
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
 ```
-xcode-project build-ipa: error: argument --workspace: Path "ios/App/App.xcworkspace" does not exist
-```
-
-**Root cause:** Capacitor v6+ dropped CocoaPods and switched to Swift Package Manager (SPM). No `.xcworkspace` is ever created — only `App.xcodeproj`. Using `--workspace` is wrong.
-
-**Fix:** Use `--project` instead of `--workspace` in `codemagic.yaml`:
-```yaml
-- name: Build IPA
-  script: |
-    xcode-project build-ipa \
-      --project "$XCODE_PROJECT" \
-      --scheme "$XCODE_SCHEME"
-```
-And set the var: `XCODE_PROJECT: ios/App/App.xcodeproj`
-
-**Do NOT add a `pod install` step** — there is no Podfile. It won't fix anything and wastes ~2 minutes of build time.
-
-**Affects:** Any project using `@capacitor/ios` v6, v7, or v8.
 
 ---
 
-## Codemagic: `"App" requires a provisioning profile`
+## Environment / setup
 
-**Symptom:** Archive step fails with:
-```
-error: "App" requires a provisioning profile. Select a provisioning profile in the Signing & Capabilities editor.
-```
+### `cap add ios` fails on Windows/Linux
+`cap add ios` shells out to Xcode tooling and requires macOS. Run it on a Mac or let Codemagic's Mac runner do it. Guard in yaml: `if [ ! -d "ios" ]; then npx cap add ios; fi`
 
-**Root cause:** `xcode-project use-profiles` searches for an Xcode project from the working directory (repo root). For Capacitor projects the project is at `ios/App/App.xcodeproj` — two levels deep. Without an explicit path it either finds nothing or patches the wrong file, so the provisioning profile never gets injected before `xcodebuild archive` runs.
+### `certificate_private_key.pem` lost / regenerated
+If you regenerate this file, the existing distribution certificate in Apple Developer Portal becomes unusable (private key is gone). You must revoke it in Apple Dev Portal and let Codemagic re-fetch a new one on next build.
 
-**Fix:** Pass `--project` explicitly:
-```yaml
-- name: Set up code signing
-  script: |
-    keychain initialize
-    app-store-connect fetch-signing-files "$BUNDLE_ID" \
-      --type IOS_APP_STORE \
-      --create
-    keychain add-certificates
-    xcode-project use-profiles --project "$XCODE_PROJECT"
-```
-Where `XCODE_PROJECT: ios/App/App.xcodeproj`.
+### GitHub Actions: `curl` exits 22 / empty `x-auth-token`
+**Cause:** `CODEMAGIC_API_TOKEN` GitHub secret is missing.  
+**Fix:** Add it in repo Settings → Secrets and variables → Actions.
 
----
-
-## `cap add ios` must run on macOS
-
-`npx cap add ios` cannot run on Windows or Linux — it shells out to Xcode tooling.
-Codemagic's Mac runner handles this. The `codemagic.yaml` guards this with:
-```bash
-if [ ! -d "ios" ]; then
-  npx cap add ios
-fi
-```
-This means the `ios/` directory is **not committed** to the repo — it's generated fresh on each Codemagic build. Do not commit `ios/` — it contains machine-generated files with absolute paths.
-
----
-
-## `certificate_private_key.pem` must never be committed
-
-The file is in `.gitignore`. If you regenerate it (e.g. new machine), you must also revoke the existing distribution certificate in Apple Developer Portal and let Codemagic fetch a new one via `app-store-connect fetch-signing-files`. The old cert becomes unusable once the private key is gone.
