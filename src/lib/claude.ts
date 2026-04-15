@@ -141,27 +141,29 @@ async function callAnthropic(modelId: string, userContent: string): Promise<stri
   const apiKey = await getApiKey('anthropic');
   if (!apiKey) throw new Error('NO_API_KEY_ANTHROPIC');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  // Use CapacitorHttp to bypass CORS restrictions in the native WKWebView
+  const res = await CapacitorHttp.request({
     method: 'POST',
+    url: 'https://api.anthropic.com/v1/messages',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
+    data: {
       model: modelId,
       max_tokens: 3000,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
-    }),
+    },
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
+  if (res.status !== 200) {
+    const err = res.data as { error?: { message?: string } };
     throw new Error(err?.error?.message ?? `ANTHROPIC_${res.status}`);
   }
 
-  const data = await res.json() as { content: Array<{ text: string }> };
+  const data = res.data as { content: Array<{ text: string }> };
   return data.content?.[0]?.text ?? '';
 }
 
@@ -169,13 +171,15 @@ async function callOpenAI(modelId: string, userContent: string): Promise<string>
   const apiKey = await getApiKey('openai');
   if (!apiKey) throw new Error('NO_API_KEY_OPENAI');
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Use CapacitorHttp to bypass CORS restrictions in the native WKWebView
+  const res = await CapacitorHttp.request({
     method: 'POST',
+    url: 'https://api.openai.com/v1/chat/completions',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
+    data: {
       model: modelId,
       max_tokens: 3000,
       messages: [
@@ -183,15 +187,15 @@ async function callOpenAI(modelId: string, userContent: string): Promise<string>
         { role: 'user', content: userContent },
       ],
       response_format: { type: 'json_object' },
-    }),
+    },
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({})) as { error?: { message?: string } };
+  if (res.status !== 200) {
+    const err = res.data as { error?: { message?: string } };
     throw new Error(err?.error?.message ?? `OPENAI_${res.status}`);
   }
 
-  const data = await res.json() as { choices: Array<{ message: { content: string } }> };
+  const data = res.data as { choices: Array<{ message: { content: string } }> };
   return data.choices?.[0]?.message?.content ?? '';
 }
 

@@ -62,8 +62,8 @@ export default function App() {
           {isTab && (
             <div style={{
               display: 'flex',
-              backgroundColor: 'rgba(8,8,8,0.97)',
-              borderTop: '1px solid rgba(255,255,255,0.08)',
+              backgroundColor: 'rgba(8,8,8,0.98)',
+              borderTop: '1px solid rgba(255,255,255,0.15)',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}>
               {TAB_SCREENS.map(tab => (
@@ -72,17 +72,19 @@ export default function App() {
                   onClick={() => replace(tab)}
                   style={{
                     flex: 1,
-                    padding: '12px 0',
+                    padding: '14px 0',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
                     fontFamily: MONO,
-                    fontSize: 10,
+                    fontSize: 12,
                     letterSpacing: 2,
-                    color: cur.screen === tab ? '#fff' : '#444',
+                    color: cur.screen === tab ? '#fff' : '#555',
+                    borderTop: cur.screen === tab ? '2px solid #efff00' : '2px solid transparent',
+                    marginTop: -1,
                   }}
                 >
-                  {tab === 'home' ? '◎ SURFACE' : '◈ VAULT'}
+                  {tab === 'home' ? '◎  SURFACE' : '◈  VAULT'}
                 </button>
               ))}
             </div>
