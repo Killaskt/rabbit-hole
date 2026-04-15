@@ -12,8 +12,19 @@ Issues hit and solved in production. Check here first before debugging. Full con
 **Never add `pod install`** — there is no Podfile.
 
 ### `"App" requires a provisioning profile`
-**Cause:** `xcode-project use-profiles` called without `--project`, so it can't find the project at `ios/App/App.xcodeproj` and doesn't inject the profile.  
-**Fix:** `xcode-project use-profiles --project "$XCODE_PROJECT"`
+**Cause:** `xcode-project use-profiles` called with `--project <relative-path>` — the relative path isn't resolved correctly and the tool never patches the `.xcodeproj`, so no profile specifier is injected before `xcodebuild archive` runs. Also fails if called from repo root without any path argument.  
+**Fix:** `cd` into the project directory first so the tool auto-detects it:
+```yaml
+- name: Set up code signing
+  script: |
+    keychain initialize
+    app-store-connect fetch-signing-files "$BUNDLE_ID" \
+      --type IOS_APP_STORE \
+      --create
+    keychain add-certificates
+    cd ios/App && xcode-project use-profiles && cd ../..
+```
+**Note:** `--project "$XCODE_PROJECT"` with a relative path does NOT reliably work. Use the `cd` pattern instead.
 
 ### `Cannot save Signing Certificates without certificate private key`
 **Cause:** `CERTIFICATE_PRIVATE_KEY` missing from Codemagic variable group.  
