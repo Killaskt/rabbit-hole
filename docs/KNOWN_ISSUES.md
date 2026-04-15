@@ -29,6 +29,30 @@ And set the var: `XCODE_PROJECT: ios/App/App.xcodeproj`
 
 ---
 
+## Codemagic: `"App" requires a provisioning profile`
+
+**Symptom:** Archive step fails with:
+```
+error: "App" requires a provisioning profile. Select a provisioning profile in the Signing & Capabilities editor.
+```
+
+**Root cause:** `xcode-project use-profiles` searches for an Xcode project from the working directory (repo root). For Capacitor projects the project is at `ios/App/App.xcodeproj` — two levels deep. Without an explicit path it either finds nothing or patches the wrong file, so the provisioning profile never gets injected before `xcodebuild archive` runs.
+
+**Fix:** Pass `--project` explicitly:
+```yaml
+- name: Set up code signing
+  script: |
+    keychain initialize
+    app-store-connect fetch-signing-files "$BUNDLE_ID" \
+      --type IOS_APP_STORE \
+      --create
+    keychain add-certificates
+    xcode-project use-profiles --project "$XCODE_PROJECT"
+```
+Where `XCODE_PROJECT: ios/App/App.xcodeproj`.
+
+---
+
 ## `cap add ios` must run on macOS
 
 `npx cap add ios` cannot run on Windows or Linux — it shells out to Xcode tooling.
