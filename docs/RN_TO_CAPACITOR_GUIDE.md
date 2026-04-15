@@ -161,7 +161,15 @@ workflows:
         expire_build_submitted_for_review: true
 ```
 
-**Important:** Capacitor v7+ uses Swift Package Manager (SPM) — there is no Podfile. Do NOT add a `pod install` step.
+### ⚠️ CocoaPods vs SPM — common build failure
+
+Capacitor v6+ uses **Swift Package Manager (SPM)**. There is no Podfile, no `.xcworkspace`.
+
+- Use `--project ios/App/App.xcodeproj` — NOT `--workspace ios/App/App.xcworkspace`
+- Do **not** add a `pod install` step — it does nothing and wastes 2 min
+- The `.xcworkspace` path will never exist; if you see that error you have the wrong flag
+
+This has caused build failures before. See `docs/KNOWN_ISSUES.md` for the full record.
 
 **Export compliance:** Add to `ios/App/App/Info.plist` to skip the prompt on every build:
 ```xml
