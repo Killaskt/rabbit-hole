@@ -28,7 +28,7 @@ export const LEVEL_NAMES = [
   'SHADOW', 'CIPHER', 'NEXUS', 'VOID', 'RABBIT KING',
 ];
 
-// XP thresholds per level (cumulative cost to level up)
+// XP cost to reach each level (index 0 = unused, index 1 = cost from lvl1→lvl2, etc.)
 const LEVEL_XP = [0, 150, 300, 500, 750, 1100, 1500, 2100, 3000, 4200];
 
 export function getLevelFromXP(totalXP: number): number {
@@ -145,12 +145,10 @@ export async function recordSession(opts: {
   const today = new Date().toISOString().split('T')[0];
   const prevLevel = getLevelFromXP(_state.totalXP);
 
-  // XP breakdown
   const sessionBase = opts.mode === 'deep_dive' ? 100 : 50;
   const quizBonus = opts.quizScore * 25;
   const perfectBonus = opts.quizScore === 2 ? 50 : 0;
 
-  // Streak logic
   let streakBonus = 0;
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
@@ -167,7 +165,6 @@ export async function recordSession(opts: {
   }
   if (_state.currentStreak >= 3) streakBonus = 25;
 
-  // Today's session count
   if (_state.todayDate !== today) {
     _state.todaySessions = 0;
     _state.todayDate = today;
@@ -180,7 +177,6 @@ export async function recordSession(opts: {
   if (opts.mode === 'deep_dive') _state.totalDeepDives += 1;
   if (opts.quizScore === 2) _state.perfectQuizzes += 1;
 
-  // Achievement checks
   const newAchievements: Achievement[] = [];
   for (const ach of ALL_ACHIEVEMENTS) {
     if (_state.achievements.includes(ach.id)) continue;
@@ -198,56 +194,44 @@ export async function recordSession(opts: {
     }
     if (unlocked) {
       _state.achievements.push(ach.id);
-      newAchievements.push({ ...ach, unlockedAt: Date.now() });
+      newAchievements.push(ach);
     }
   }
 
   const levelUp = getLevelFromXP(_state.totalXP) > prevLevel;
   await saveGameState(_state);
 
-  return {
-    xp: { sessionBase, quizBonus, perfectBonus, streakBonus, total },
-    newAchievements,
-    levelUp,
-  };
+  return { xp: { sessionBase, quizBonus, perfectBonus, streakBonus, total }, newAchievements, levelUp };
 }
 
-const XP_PER_CORRECT_DRILL = 15;
-
-export async function recordDrill(score: number, total: number): Promise<{
+export async function recordDrill(correct: number, total: number): Promise<{
   xpEarned: number;
   newAchievements: Achievement[];
 }> {
-  const xpEarned = score * XP_PER_CORRECT_DRILL;
+  const XP_PER_CORRECT = 15;
+  const xpEarned = correct * XP_PER_CORRECT + (correct === total && total > 0 ? 25 : 0);
+
   _state.totalXP += xpEarned;
   _state.totalDrills += 1;
-  _state.totalDrillCorrect += score;
+  _state.totalDrillCorrect += correct;
   _state.totalDrillQuestions += total;
-  if (score === total && total > 0) _state.perfectDrills += 1;
+  if (correct === total && total > 0) _state.perfectDrills += 1;
 
   const newAchievements: Achievement[] = [];
   for (const ach of ALL_ACHIEVEMENTS) {
     if (_state.achievements.includes(ach.id)) continue;
     let unlocked = false;
     switch (ach.id) {
-      case 'first_recall':   unlocked = _state.totalDrills >= 1; break;
-      case 'perfect_recall': unlocked = score === total && total > 0; break;
-      case 'recall_veteran': unlocked = _state.totalDrills >= 10; break;
+      case 'first_recall':    unlocked = _state.totalDrills >= 1; break;
+      case 'perfect_recall':  unlocked = correct === total && total > 0; break;
+      case 'recall_veteran':  unlocked = _state.totalDrills >= 10; break;
     }
     if (unlocked) {
       _state.achievements.push(ach.id);
-      newAchievements.push({ ...ach, unlockedAt: Date.now() });
+      newAchievements.push(ach);
     }
   }
 
   await saveGameState(_state);
   return { xpEarned, newAchievements };
-}
-
-export function getAllAchievements(): (Achievement & { unlocked: boolean })[] {
-  return ALL_ACHIEVEMENTS.map(ach => ({
-    ...ach,
-    unlocked: _state.achievements.includes(ach.id),
-    unlockedAt: _state.achievements.includes(ach.id) ? Date.now() : undefined,
-  }));
 }

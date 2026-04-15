@@ -1,3 +1,4 @@
+import { CapacitorHttp } from '@capacitor/core';
 import { LessonInput, LessonOutput } from '../types/lesson';
 import { getApiKey, getModelOption, getPreferredModel } from './storage';
 
@@ -105,10 +106,12 @@ export async function fetchOGTags(url: string): Promise<{
   };
 
   try {
-    const res = await fetch(url, {
+    // Use CapacitorHttp to bypass CORS restrictions on iOS
+    const res = await CapacitorHttp.get({
+      url,
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RabbitHoleBot/1.0)' },
     });
-    const html = await res.text();
+    const html = res.data as string;
 
     const getTag = (prop: string) =>
       html.match(new RegExp(`<meta[^>]*property=["']${prop}["'][^>]*content=["']([^"']+)["']`, 'i'))?.[1]?.trim()
@@ -175,12 +178,10 @@ async function callOpenAI(modelId: string, userContent: string): Promise<string>
     body: JSON.stringify({
       model: modelId,
       max_tokens: 3000,
-      // OpenAI takes system as first message in messages array
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userContent },
       ],
-      // Encourage pure JSON output
       response_format: { type: 'json_object' },
     }),
   });

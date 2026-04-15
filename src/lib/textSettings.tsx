@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import { loadTextSettings, saveTextSettings } from './storage';
 
 export const SCALE_STEPS = [1, 1.15, 1.3] as const;
 export const SCALE_LABELS = ['NORMAL', 'LARGE', 'X-LARGE'] as const;
@@ -18,7 +18,6 @@ interface TextSettingsCtx {
 }
 
 const DEFAULT: TextSettings = { scaleIndex: 0, bold: false };
-const KEY = 'rh_text_settings';
 
 export const TextSettingsContext = createContext<TextSettingsCtx>({
   scale: 1, scaleIndex: 0, scaleLabel: 'NORMAL', bold: false,
@@ -32,14 +31,14 @@ export function TextSettingsProvider({ children }: { children: React.ReactNode }
   const [settings, setSettings] = useState<TextSettings>(DEFAULT);
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY).then(raw => {
-      if (raw) setSettings({ ...DEFAULT, ...JSON.parse(raw) });
+    loadTextSettings().then(raw => {
+      if (raw) setSettings({ ...DEFAULT, ...(raw as TextSettings) });
     });
   }, []);
 
   const save = (s: TextSettings) => {
     setSettings(s);
-    AsyncStorage.setItem(KEY, JSON.stringify(s));
+    saveTextSettings(s);
   };
 
   const { scaleIndex, bold } = settings;

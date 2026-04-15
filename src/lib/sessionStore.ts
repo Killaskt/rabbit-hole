@@ -1,6 +1,5 @@
 import { LessonOutput } from '../types/lesson';
 
-// In-memory store for passing session data between screens
 interface CurrentSession {
   lesson: LessonOutput | null;
   mode: 'skim' | 'deep_dive';
