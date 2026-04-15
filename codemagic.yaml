@@ -42,6 +42,14 @@ workflows:
           echo "Bundle ID set to: $BUNDLE_ID"
           grep "PRODUCT_BUNDLE_IDENTIFIER" App.xcodeproj/project.pbxproj
 
+      - name: Set export compliance flag
+        script: |
+          # App uses no custom encryption (HTTPS only = OS-level/exempt).
+          # Avoids App Store Connect prompting on every submission.
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
+
       - name: Set build number
         script: |
           BUILD_NUM=$(date +%s)
@@ -121,6 +129,12 @@ workflows:
           sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/g" App.xcodeproj/project.pbxproj
           echo "Bundle ID set to: $BUNDLE_ID"
           grep "PRODUCT_BUNDLE_IDENTIFIER" App.xcodeproj/project.pbxproj
+
+      - name: Set export compliance flag
+        script: |
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
 
       - name: Set build number
         script: |

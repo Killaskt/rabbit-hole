@@ -43,8 +43,11 @@ Issues hit and solved in production. Check here first before debugging. Full con
 **Fix:** Add it. See `CODEMAGIC_SETUP.md` for the complete publishing block.
 
 ### First TestFlight build blocked on export compliance
-**Cause:** No `ITSAppUsesNonExemptEncryption` key in `ios/App/App/Info.plist`.  
-**Fix:** After first `cap add ios` adds the `ios/` directory, add to `Info.plist`:
+**Cause:** No `ITSAppUsesNonExemptEncryption` key in `ios/App/App/Info.plist`. App Store Connect prompts on every submission if missing.  
+**Answer:** Select "None of the algorithms mentioned above" — HTTPS is OS-level/exempt, not custom encryption. Can be changed later if you add custom encryption.  
+**Fix (automated in codemagic.yaml):** A "Set export compliance flag" step runs `PlistBuddy` to add `ITSAppUsesNonExemptEncryption = false` to `Info.plist` after `cap sync`. No manual action needed after initial setup.
+
+If you ever need to do it manually:
 ```xml
 <key>ITSAppUsesNonExemptEncryption</key>
 <false/>
