@@ -72,7 +72,7 @@ export default function App() {
                   onClick={() => replace(tab)}
                   style={{
                     flex: 1,
-                    padding: '14px 0',
+                    padding: '16px 0',
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
@@ -80,8 +80,7 @@ export default function App() {
                     fontSize: 12,
                     letterSpacing: 2,
                     color: cur.screen === tab ? '#fff' : '#555',
-                    borderTop: cur.screen === tab ? '2px solid #efff00' : '2px solid transparent',
-                    marginTop: -1,
+                    boxShadow: cur.screen === tab ? 'inset 0 2px 0 #efff00' : 'none',
                   }}
                 >
                   {tab === 'home' ? '◎  SURFACE' : '◈  VAULT'}
