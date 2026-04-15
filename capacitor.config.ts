@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.rabbithole.app',
+  appId: 'com.killaskt.rabbithole',
   appName: 'Rabbit Hole',
   webDir: 'dist',
   ios: {

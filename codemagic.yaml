@@ -6,7 +6,7 @@ workflows:
       groups:
         - ShazamApps
       vars:
-        BUNDLE_ID: com.rabbithole.app
+        BUNDLE_ID: com.killaskt.rabbithole
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
       xcode: latest
@@ -60,7 +60,7 @@ workflows:
       groups:
         - ShazamApps
       vars:
-        BUNDLE_ID: com.rabbithole.app
+        BUNDLE_ID: com.killaskt.rabbithole
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
       xcode: latest
