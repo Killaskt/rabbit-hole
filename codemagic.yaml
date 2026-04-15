@@ -34,16 +34,53 @@ workflows:
             --type IOS_APP_STORE \
             --create
           keychain add-certificates
-          cd ios/App && xcode-project use-profiles && cd ../..
+
+          # Write API key for xcodebuild automatic provisioning
+          API_KEY_DIR="$HOME/private_keys"
+          mkdir -p "$API_KEY_DIR"
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "$API_KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
 
       - name: Build IPA
         script: |
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+          cd ios/App
+
+          xcodebuild -project App.xcodeproj \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/build/ios/xcarchive/App.xcarchive" \
+            archive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+
+          cat > "$CM_BUILD_DIR/exportOptions.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/xcarchive/App.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/xcarchive/*.xcarchive
 
     publishing:
       app_store_connect:
@@ -88,13 +125,48 @@ workflows:
             --type IOS_APP_DEVELOPMENT \
             --create
           keychain add-certificates
-          cd ios/App && xcode-project use-profiles && cd ../..
+
+          API_KEY_DIR="$HOME/private_keys"
+          mkdir -p "$API_KEY_DIR"
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > "$API_KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8"
 
       - name: Build IPA
         script: |
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+          cd ios/App
+
+          xcodebuild -project App.xcodeproj \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Debug \
+            -archivePath "$CM_BUILD_DIR/build/ios/xcarchive/App.xcarchive" \
+            archive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+
+          cat > "$CM_BUILD_DIR/exportOptions.plist" << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>development</string>
+            <key>uploadBitcode</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/ios/xcarchive/App.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
 
     artifacts:
       - build/ios/ipa/*.ipa
