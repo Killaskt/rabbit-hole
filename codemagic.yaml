@@ -34,7 +34,7 @@ workflows:
             --type IOS_APP_STORE \
             --create
           keychain add-certificates
-          xcode-project use-profiles --project "$XCODE_PROJECT"
+          cd ios/App && xcode-project use-profiles && cd ../..
 
       - name: Build IPA
         script: |
@@ -88,7 +88,7 @@ workflows:
             --type IOS_APP_DEVELOPMENT \
             --create
           keychain add-certificates
-          xcode-project use-profiles --project "$XCODE_PROJECT"
+          cd ios/App && xcode-project use-profiles && cd ../..
 
       - name: Build IPA
         script: |
