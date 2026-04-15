@@ -62,6 +62,7 @@ export default function App() {
           {isTab && (
             <div style={{
               display: 'flex',
+              minHeight: 56,
               backgroundColor: 'rgba(8,8,8,0.98)',
               borderTop: '1px solid rgba(255,255,255,0.15)',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
