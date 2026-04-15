@@ -7,7 +7,7 @@ workflows:
         - ShazamApps
       vars:
         BUNDLE_ID: com.killaskt.rabbithole
-        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_PROJECT: ios/App/App.xcodeproj
         XCODE_SCHEME: App
       xcode: latest
       node: 22
@@ -27,9 +27,6 @@ workflows:
       - name: Sync Capacitor
         script: npx cap sync ios
 
-      - name: Install CocoaPods dependencies
-        script: cd ios/App && pod install
-
       - name: Set up code signing
         script: |
           keychain initialize
@@ -42,7 +39,7 @@ workflows:
       - name: Build IPA
         script: |
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
@@ -64,7 +61,7 @@ workflows:
         - ShazamApps
       vars:
         BUNDLE_ID: com.killaskt.rabbithole
-        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_PROJECT: ios/App/App.xcodeproj
         XCODE_SCHEME: App
       xcode: latest
       node: 22
@@ -84,9 +81,6 @@ workflows:
       - name: Sync Capacitor
         script: npx cap sync ios
 
-      - name: Install CocoaPods dependencies
-        script: cd ios/App && pod install
-
       - name: Set up code signing
         script: |
           keychain initialize
@@ -99,7 +93,7 @@ workflows:
       - name: Build IPA
         script: |
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
