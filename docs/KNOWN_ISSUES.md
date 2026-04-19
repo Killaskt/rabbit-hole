@@ -53,6 +53,57 @@ If you ever need to do it manually:
 <false/>
 ```
 
+### `Failure: Complete test information is required` (TestFlight external review)
+**Cause:** Apple requires reviewer contact details before a build can be submitted for external TestFlight testing. This is a one-time manual step per app.  
+**Symptoms in Codemagic log:**
+```
+App is missing required Beta App Information: Feedback Email.
+App is missing required Beta App Review Information: First Name, Last Name, Phone Number, Email.
+```
+**Fix:** Go to [App Store Connect → TestFlight → Test Information](https://appstoreconnect.apple.com/apps/6762248606/testflight/test-info) and fill in:
+- **Beta App Information:** Feedback Email
+- **Beta App Review Information:** First Name, Last Name, Phone Number, Email (your contact info — not shown to users, only to Apple reviewers)  
+
+Only needed once. Subsequent builds submit automatically.
+
+### App Store Connect API 401 on `Fetch signing files`
+**Cause:** One of the three credentials in the Codemagic variable group is wrong, expired, or the key was revoked.  
+**Check:**
+1. Go to [App Store Connect → Users and Access → Integrations → Keys](https://appstoreconnect.apple.com/access/integrations/api) — confirm key is not revoked
+2. `APP_STORE_CONNECT_KEY_IDENTIFIER` = the **Key ID** column value
+3. `APP_STORE_CONNECT_ISSUER_ID` = the **Issuer ID** shown at the top of that page
+4. `APP_STORE_CONNECT_PRIVATE_KEY` = full contents of the `.p8` file including `-----BEGIN PRIVATE KEY-----` / `-----END PRIVATE KEY-----` lines  
+
+**Note:** The same API key can be reused across multiple apps and Codemagic projects — it's account-wide.  
+**Note:** `APP_STORE_CONNECT_PRIVATE_KEY` (`.p8` API key) and `CERTIFICATE_PRIVATE_KEY` (RSA signing key) are **different things**. Do not mix them up.
+
+### `cap add ios` generates wrong bundle ID — provisioning profile doesn't match
+**Cause:** `cap add ios` sets a default/template `PRODUCT_BUNDLE_IDENTIFIER` in the generated `xcodeproj`. The profile fetched for `com.killaskt.rabbithole` doesn't match the target, so `use-profiles` silently skips injection and signing fails.  
+**Fix (automated in codemagic.yaml):** A "Verify bundle ID" step uses `sed` to force-replace every `PRODUCT_BUNDLE_IDENTIFIER` in `project.pbxproj` after `cap add ios`:
+```bash
+sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = .*/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/g" App.xcodeproj/project.pbxproj
+```
+**Root cause insight:** Projects that commit `ios/` to the repo (like habbitOS) never hit this — the bundle ID is pre-set. Projects that run `cap add ios` fresh on CI every build must force it.
+
+---
+
+## GitHub Actions / CI
+
+### PR pushes don't trigger a Codemagic build
+**Cause:** `deploy.yml` only fires on `push: branches: [master]`. No workflow was wired to PRs.  
+**Fix:** `preview.yml` triggers the `ios-feature-preview` Codemagic workflow on every PR push targeting `master`. Uses `GITHUB_HEAD_REF` (the PR branch, not `master`) so Codemagic builds the actual PR code.
+
+### iOS zoom / pinch-to-zoom enabled unexpectedly
+**Cause:** Viewport meta tag missing `user-scalable=no`. In Capacitor's WKWebView, iOS allows pinch/double-tap zoom the same as Safari unless explicitly disabled.  
+**Fix:** `index.html` viewport:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+```
+
+### API calls fail with "Load failed" / network error in Capacitor
+**Cause:** Regular `fetch()` hits CORS enforcement in Capacitor's native WKWebView, same as in Safari. External API calls to Anthropic/OpenAI fail.  
+**Fix:** Use `CapacitorHttp.request()` instead of `fetch()` for all external API calls. `CapacitorHttp` routes through native HTTP and bypasses CORS entirely.
+
 ---
 
 ## Environment / setup
