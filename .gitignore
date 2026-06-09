@@ -1,0 +1,17 @@
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Capacitor generated keys (never commit)
+certificate_private_key.pem
+
+# Misc
+.DS_Store
+*.local
+
+# Legacy expo (kept for reference)
+# expo-env.d.ts
+node_modules
